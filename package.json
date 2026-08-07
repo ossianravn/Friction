@@ -1,0 +1,31 @@
+{
+  "name": "friction",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "friction": "dist/bin/friction.js"
+  },
+  "files": [
+    "dist/",
+    "assets/",
+    "skills/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "check:lines": "node scripts/check-code-lines.mjs",
+    "check": "npm run check:lines && npm run typecheck && npm test && npm run build",
+    "pack:smoke": "node scripts/pack-smoke.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "tsx": "^4.23.10",
+    "typescript": "^7.0.2"
+  }
+}
