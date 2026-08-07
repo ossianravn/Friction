@@ -1,165 +1,314 @@
 # Friction
 
-Friction is a personal, local-first feedback loop between one developer and coding
-agents. It captures concrete avoidable task cost, keeps the canonical corpus private,
-helps a coding harness review and fix verified patterns, and can explicitly project
-selected sanitized records into a repository.
+Friction helps Codex and Claude Code remember what made your work harder—not only what
+they finished.
 
-This proof of concept is private and unpublished. It targets Node.js 24 or newer and
-has no runtime dependencies.
+Imagine that your coding agent completes a task, but only after it follows an outdated
+guide, searches in the wrong place, and works around a misleading test command. The task
+is done, so those problems usually disappear from view. The next agent can lose time to
+the same problems again.
 
-## Install from a local tarball
+Friction gives your agent a private place to leave a short note when that happens. Later,
+you can ask Codex or Claude Code to review those notes, find repeated problems, verify the
+likely causes against the current code, and recommend what is worth fixing first.
 
-Build and verify the package in this repository:
+Nothing is reviewed, changed, or shared in the background. You decide when review happens,
+which fix is allowed, and whether any record should be added to a repository.
+
+Friction is currently an unpublished proof of concept for one developer working across
+one or more repositories.
+
+## The workflow in plain language
+
+1. You work with Codex or Claude Code as usual.
+2. When the agent encounters an avoidable obstacle, it records one short private note and
+   continues the main task.
+3. When you are ready, you ask the agent to review the accumulated notes.
+4. The agent groups repeated problems and checks whether the suspected causes are real.
+5. You choose one verified problem and explicitly authorize a fix.
+6. The agent fixes that problem, verifies the original path, and marks only the addressed
+   notes as resolved.
+
+Friction calls each note an **observation**. An observation is one or two sentences about
+what the agent was trying to do, what got in the way, and what effect that had.
+
+## Get started
+
+The five steps below are the complete first-use path. Everything after them is reference
+for when you need more control.
+
+### 1. Install Friction
+
+You need:
+
+- macOS or Linux;
+- Node.js 24 or newer;
+- npm; and
+- Codex or Claude Code.
+
+Friction is not published to npm yet. Build and install it from this repository:
 
 ```sh
-npm install
-npm run check
-npm run pack:smoke
+git clone https://github.com/ossianravn/Friction.git
+cd Friction
+npm ci
+npm run build
 npm pack
-```
-
-Install the resulting tarball persistently so ambient capture does not invoke a package
-runner on every observation:
-
-```sh
 npm install --global ./friction-0.0.0.tgz
 friction --version
 ```
 
-A package runner is useful for trying setup without a global install:
+If you already have this repository, start with `npm ci`.
 
-```sh
-npm exec --package ./friction-0.0.0.tgz -- friction setup codex
-```
+The global install matters because your coding agent needs a stable `friction` command on
+`PATH`. Friction setup never installs the command for you.
 
-Setup only warns when `friction` is absent from `PATH`; it never installs the CLI.
+### 2. Connect Friction to your coding agent
 
-## Harness setup
+Setup has two steps: preview the exact plan, then apply it. The preview makes no changes.
 
-Setup defaults to user scope and preview. Inspect the plan, then apply it explicitly:
+For Codex:
 
 ```sh
 friction setup codex
 friction setup codex --apply
+```
+
+For Claude Code:
+
+```sh
+friction setup claude-code
 friction setup claude-code --apply
 ```
 
-Use `--scope repo` inside a Git worktree for repository-local instructions and skills.
-Undo is also preview-first:
+Run both pairs if you use both coding agents. Start a new coding-agent session after
+setup so it reloads its instructions and skills.
+
+By default, setup applies to your user account, so Friction is available across your
+repositories. To enable it for only the repository you are currently in, add
+`--scope repo` to both the preview and apply commands:
 
 ```sh
-friction setup codex --undo
-friction setup codex --undo --apply
+friction setup codex --scope repo
+friction setup codex --scope repo --apply
 ```
 
-Codex and Claude Code adapters install a concise ambient capture instruction plus
-separate `friction-review` and `friction-fix` skills. `friction setup generic` prints a
-portable snippet and packaged skill paths without writing anything.
+Setup adds three things to the selected coding agent:
 
-## Capture and inspect
+- a short instruction explaining when to record an observation;
+- a `friction-review` skill for read-only analysis; and
+- a `friction-fix` skill for explicitly authorized fixes.
 
-Prefer stdin so authored text stays out of shell history:
+### 3. Work normally
 
-```sh
-printf '%s\n' "A stale setup guide caused a retry while configuring the project." |
-  friction add --stdin --source manual --impact retry
+You do not need to start or monitor Friction. Continue giving Codex or Claude Code normal
+coding tasks.
+
+When the agent notices a concrete, avoidable obstacle, its Friction instruction tells it
+to finish the immediate step, record a concise observation, and continue. Examples
+include:
+
+- a setup guide points to a command that no longer exists;
+- unclear ownership forces the agent to search several modules before making a small
+  change;
+- a test or script reports success while producing misleading evidence;
+- duplicated configuration requires the same change in unrelated places; or
+- a hidden requirement causes a retry or workaround.
+
+Friction is not meant to record progress updates, ordinary coding mistakes, style
+preferences, full transcripts, secrets, or large command output.
+
+### 4. Ask for a review
+
+After Friction has collected observations, ask your coding agent to use the installed
+review skill. For example:
+
+```text
+Use friction-review to review the Friction observations for this repository.
+Verify the likely causes against the current code and tell me what is worth fixing first.
+Do not change anything.
 ```
 
-The body is the only required authored field. Add `--area` or `--impact` only when it is
-obvious. Successful capture returns a receipt without echoing the body.
+The review is read-only. It reports recurring patterns, distinguishes verified causes
+from guesses, and recommends a priority. It does not modify code, configuration, or
+observation status.
+
+To review observations from every repository instead, say “across all repositories” in
+your request.
+
+### 5. Authorize one fix
+
+Choose a verified problem from the review and name it explicitly. Include the observation
+IDs from the review so the scope is unambiguous. For example:
+
+```text
+Use friction-fix to fix the verified “stale setup guide” problem from the review,
+covering observations fr_0123456789abcdef0123456789abcdef and
+fr_fedcba9876543210fedcba9876543210.
+Change only that scope, verify the original failing path, and resolve only the
+observations the fix actually addresses.
+```
+
+The fix skill inspects the current implementation, confirms the cause, makes the smallest
+appropriate change, and verifies the result. If the cause cannot be confirmed, it should
+report that uncertainty instead of guessing or closing the observations.
+
+## See what Friction has recorded
+
+Run these commands yourself whenever you want a direct view:
 
 ```sh
+# Show open observations for the repository you are currently in
 friction list
+
+# Include resolved observations from every repository
 friction list --status all --repo all
+
+# Show counts and other structural facts without analyzing causes
 friction stats --status all
+
+# Check that storage, repository detection, setup, and the runtime are working
 friction doctor
-friction schema
 ```
 
-Use `--json` for one versioned machine envelope.
+Inside a Git repository, read commands use that repository by default. Outside Git, they
+use all repositories. If Friction knows it is in a repository but cannot identify that
+repository safely, it refuses the implicit read instead of showing unrelated private
+records. You can still request `--repo all` explicitly.
 
-## Review and fix
+For machine-readable output, add `--json`. Use `friction --help` or
+`friction <command> --help` for the complete command options.
 
-Ask the coding harness to use `friction-review` when you want a read-only analysis of
-recurring friction, false evidence, likely priorities, and verified or refuted causes.
-Review never changes code, configuration, projections, or lifecycle state.
+## Record an observation yourself
 
-Ask it to use `friction-fix` only with an explicitly named observation or reviewed
-cluster. The fix workflow traces the owning production path, makes the smallest scoped
-root fix, verifies it, and resolves exactly the records covered by that evidence.
-
-Lifecycle can also be managed directly:
+Agent setup handles normal capture. You can also record something manually:
 
 ```sh
-friction resolve fr_<full-id> --verification "Rechecked the original failing path."
-friction reopen fr_<full-id> --note "The behavior recurred."
+printf '%s\n' "The setup guide used a removed command, which caused a failed first attempt." |
+  friction add --stdin --source manual
 ```
 
-## Export, publish, and purge
+Standard input is preferred because it keeps the observation text out of your shell
+history. A successful capture returns a receipt without repeating the text you submitted.
 
-`export` is a private read projection. It writes to stdout unless an output file is
-explicitly selected:
+## Keep observations private or share them deliberately
+
+Your private Friction store holds the original records. Exports and repository copies do
+not replace it. Ordinary capture never writes to the repository you are working in.
+
+### Make a private export
+
+`export` creates a private copy for your own use. It writes to the terminal unless you
+choose a file:
 
 ```sh
 friction export --status all
 friction export --format jsonl --output ./friction-private.jsonl
 ```
 
-`publish` is different: it is explicit repository sharing. Preview selected full IDs
-or all current-repository open records, then apply:
+An exported file is separate from Friction's store. Treat it as private and manage or
+delete it yourself.
+
+### Share selected observations with a repository
+
+`publish` is the only Friction command that intentionally shares observations with a
+repository. It writes only the fields intended for sharing and screens the text before
+writing. Preview first, then apply.
+
+Replace the example ID below with a complete ID from `friction list`:
 
 ```sh
-friction publish fr_<full-id>
-friction publish fr_<full-id> --apply
+friction publish fr_0123456789abcdef0123456789abcdef
+friction publish fr_0123456789abcdef0123456789abcdef --apply
+```
+
+You can also publish every open observation belonging to the current repository:
+
+```sh
+friction publish --all-open
 friction publish --all-open --apply
 ```
 
-The default `.friction/observations.jsonl` contains only a strict sanitized allowlist.
-It is not imported back, does not become canonical, and does not alter private lifecycle
-state.
+The default destination is `.friction/observations.jsonl` in the current repository.
+Publishing does not move your private data, change observation status, or make the
+repository copy the new source of truth.
 
-Purge is destructive and preview-first:
+## Undo setup or remove private observations
+
+Setup removal is preview-first, like setup itself:
 
 ```sh
-friction purge fr_<full-id>
-friction purge fr_<full-id> --apply
+friction setup codex --undo
+friction setup codex --undo --apply
 ```
 
-Purge removes only matching private events. Exports, repository projections, commits,
-backups, and copied files remain separate and must be managed separately.
+Replace `codex` with `claude-code` when needed. Friction removes only content it owns and
+refuses to overwrite or delete content that changed unexpectedly.
 
-## Privacy model
-
-- Private user-local event files are the only canonical store.
-- Agent-authored values are byte-bounded and screened for high-confidence secrets
-  before persistence or sharing.
-- Raw Git remotes and absolute repository roots are not persisted in public views.
-- Capture never writes to the current repository.
-- Setup, publish, undo, and purge previews perform no writes.
-- There is no cloud service, telemetry, daemon, hook, transcript ingestion, background
-  analysis, model API call, or automatic fix.
-
-Set `FRICTION_HOME` to an isolated directory for development or testing. Never exercise
-mutating setup, publish, or purge commands against live configuration or private data
-without first reviewing their previews.
-
-## Development
+To permanently remove one observation and its private history, preview the purge and then
+apply it. Replace the example ID with a complete ID from `friction list`:
 
 ```sh
-npm run check:lines
-npm run typecheck
-npm test
-npm run build
+friction purge fr_0123456789abcdef0123456789abcdef
+friction purge fr_0123456789abcdef0123456789abcdef --apply
+```
+
+Purge affects only Friction's private event files. It cannot remove copies you previously
+exported, published, committed, backed up, or shared elsewhere.
+
+## Privacy and control
+
+Friction is designed to make its boundaries understandable:
+
+- Observations are stored locally on your computer.
+- There is no Friction account, cloud service, telemetry, continuously running process,
+  automatic hook, transcript collection, or background review.
+- The command-line program behaves predictably and does not contact an AI model. Codex or
+  Claude Code provides the reasoning only when you ask it to use a review or fix skill.
+- Agent-authored text is limited in size and screened for high-confidence credential
+  patterns before it is stored or shared.
+- Secret screening reduces risk but is not a password vault or a guarantee that every
+  possible secret format will be detected. Never intentionally submit secrets.
+- Raw Git remote URLs, absolute repository paths, and internal repository keys are not
+  included in exports or published records.
+- Capture never changes your current repository.
+- Setup, undo, publish, and purge make no changes unless you add `--apply`.
+- Review is read-only. Fixing, sharing, and deletion require separate explicit requests.
+
+Default private storage locations:
+
+- Linux: `$XDG_DATA_HOME/friction` when `XDG_DATA_HOME` is set, otherwise
+  `~/.local/share/friction`.
+- macOS: `~/Library/Application Support/friction`.
+
+Set `FRICTION_HOME` if you need a different location. For development and tests, always
+point it at an isolated temporary directory rather than your live private store.
+
+## Current limitations
+
+This is an unpublished proof of concept, not a polished public release.
+
+- It currently supports macOS and Linux, not Windows.
+- It requires Node.js 24 or newer.
+- It is designed for one developer and local storage; there are no teams or sync.
+- It does not automatically understand or cluster observations. Review reasoning comes
+  from the Codex or Claude Code session you explicitly invoke.
+- It does not replace your repository's issue tracker.
+- It has not been designed for private stores larger than roughly 10,000 events.
+
+## Develop Friction
+
+Use these commands when changing Friction itself:
+
+```sh
+npm ci
 npm run check
 npm run pack:smoke
 ```
 
-`npm run check` enforces the 300-line code-file limit, runs strict TypeScript checks,
-executes the focused test suite, and builds the CLI. `npm run pack:smoke` creates a local
-tarball in a temporary directory, installs it cleanly, checks packaged assets and the
-binary version, then captures and lists across separate processes with an isolated home.
+`npm run check` enforces the 300-line limit for code files, runs strict TypeScript
+checks, executes the focused test suite, and builds the command-line program.
 
-Initial dogfood should cover multiple repositories and both harnesses without hooks or
-transcript mining. Use structural stats and periodic reviews; record any richer feature
-only after repeated evidence justifies it.
+`npm run pack:smoke` creates a package in a temporary directory, installs it there, checks
+the packaged instructions and skills, and verifies that capture and reading work across
+separate processes without touching your normal Friction data.
