@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -80,11 +80,6 @@ test("export writes screened projections safely and purge previews before deleti
       })),
     )
   ).find((entry) => entry.event["observationId"] === unrelatedId)!;
-  unrelatedFile.event["legacyExtra"] = true;
-  await writeFile(
-    path.join(context.home, "v1", "events", unrelatedFile.name),
-    `${JSON.stringify(unrelatedFile.event, null, 2)}\n`,
-  );
 
   const beforePreview = await Promise.all(
     (await eventNames(context.home)).sort().map(async (name) => ({
@@ -111,6 +106,27 @@ test("export writes screened projections safely and purge previews before deleti
     beforePreview,
   );
 
+  const malformedPath = path.join(context.home, "v1", "events", "malformed.json");
+  await writeFile(
+    malformedPath,
+    `{"observationId":"${observationId}"`,
+    { encoding: "utf8", mode: 0o600 },
+  );
+  const beforeRefusal = (await eventNames(context.home)).sort();
+  const refused = await runFriction({
+    arguments: ["purge", observationId, "--apply", "--json"],
+    cwd: nested,
+    home: context.home,
+  });
+  assert.equal(refused.code, 1);
+  const refusedEnvelope = JSON.parse(refused.stdout) as Record<string, unknown>;
+  assert.equal(
+    (refusedEnvelope["error"] as Record<string, unknown>)["code"],
+    "corrupt_store",
+  );
+  assert.deepEqual((await eventNames(context.home)).sort(), beforeRefusal);
+
+  await unlink(malformedPath);
   const applied = envelope(
     await runFriction({
       arguments: ["purge", observationId, "--apply", "--json"],

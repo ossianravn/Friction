@@ -24,25 +24,47 @@ export async function runProcess(
   options: RunOptions,
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
+    const hasInput = options.stdin !== undefined;
     const child = spawn(executable, arguments_, {
       cwd: options.cwd,
       env: options.environment ?? process.env,
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: [hasInput ? "pipe" : "ignore", "pipe", "pipe"],
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
+    let settled = false;
 
-    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
-    child.on("error", reject);
+    const fail = (error: Error): void => {
+      if (!settled) {
+        settled = true;
+        reject(error);
+      }
+    };
+
+    child.stdout!.on("data", (chunk: Buffer) => stdout.push(chunk));
+    child.stderr!.on("data", (chunk: Buffer) => stderr.push(chunk));
+    child.on("error", fail);
     child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
       resolve({
         code: code ?? 1,
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
       });
     });
-    child.stdin.end(options.stdin ?? "");
+
+    if (hasInput) {
+      child.stdin!.on("error", (error: NodeJS.ErrnoException) => {
+        if (error.code !== "EPIPE") {
+          fail(error);
+        }
+      });
+      child.stdin!.end(options.stdin);
+    }
   });
 }
 

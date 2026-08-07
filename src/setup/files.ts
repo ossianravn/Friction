@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, readFile } from "node:fs/promises";
+import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 
 import { FrictionFailure } from "../domain/failures.js";
@@ -18,6 +18,54 @@ function isMissing(error: unknown): boolean {
 
 function digest(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+export function setupFileDigest(bytes: Buffer): string {
+  return digest(bytes);
+}
+
+export async function canonicalizeSetupRoot(requestedRoot: string): Promise<string> {
+  const absolute = path.resolve(requestedRoot);
+  const parsed = path.parse(absolute);
+  const components = absolute.slice(parsed.root.length).split(path.sep).filter(Boolean);
+  let current = parsed.root;
+  let nearestExisting = parsed.root;
+  let missing = false;
+  let existingCount = 0;
+
+  for (const component of components) {
+    current = path.join(current, component);
+
+    if (missing) {
+      continue;
+    }
+
+    try {
+      const status = await lstat(current);
+
+      if (status.isSymbolicLink() || !status.isDirectory()) {
+        throw new FrictionFailure("setup_conflict");
+      }
+
+      nearestExisting = current;
+      existingCount += 1;
+    } catch (error) {
+      if (!isMissing(error)) {
+        throw error;
+      }
+
+      missing = true;
+    }
+  }
+
+  const canonicalAncestor = await realpath(nearestExisting);
+  return path.join(canonicalAncestor, ...components.slice(existingCount));
+}
+
+export async function assertSetupRoot(scopeRoot: string): Promise<void> {
+  if ((await canonicalizeSetupRoot(scopeRoot)) !== scopeRoot) {
+    throw new FrictionFailure("setup_conflict");
+  }
 }
 
 export function assertWithinScope(scopeRoot: string, targetPath: string): void {
@@ -86,6 +134,45 @@ export async function inspectSetupFile(
     }
 
     throw error;
+  }
+}
+
+export async function missingSetupDirectories(
+  scopeRoot: string,
+  targetPath: string,
+): Promise<string[]> {
+  assertWithinScope(scopeRoot, targetPath);
+  const missing: string[] = [];
+  let current = path.dirname(targetPath);
+
+  while (true) {
+    try {
+      const status = await lstat(current);
+
+      if (status.isSymbolicLink() || !status.isDirectory()) {
+        throw new FrictionFailure("setup_conflict");
+      }
+
+      return missing.reverse();
+    } catch (error) {
+      if (!isMissing(error)) {
+        throw error;
+      }
+
+      missing.push(current);
+
+      if (current === scopeRoot) {
+        return missing.reverse();
+      }
+
+      const parent = path.dirname(current);
+
+      if (parent === current) {
+        throw new FrictionFailure("setup_conflict");
+      }
+
+      current = parent;
+    }
   }
 }
 

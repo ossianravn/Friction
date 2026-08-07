@@ -1,5 +1,19 @@
 import type { ObservationRecord } from "../domain/events.js";
 import { isArea, isImpact, isSource } from "../domain/events.js";
+import {
+  hasExactKeys,
+  isRfc3339UtcMilliseconds,
+} from "../domain/event-validation.js";
+import {
+  BODY_MAX_BYTES,
+  BRANCH_MAX_BYTES,
+  CWD_RELATIVE_MAX_BYTES,
+  fitsUtf8,
+  LIFECYCLE_NOTE_MAX_BYTES,
+  LIFECYCLE_VERIFICATION_MAX_BYTES,
+  MODEL_MAX_BYTES,
+  REPOSITORY_NAME_MAX_BYTES,
+} from "../domain/limits.js";
 import { redact } from "../security/redact.js";
 import type { PublishedObservation } from "./types.js";
 
@@ -24,29 +38,20 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  return Object.keys(value).length === keys.length && keys.every((key) => key in value);
-}
-
-function timestamp(value: unknown): value is string {
+function boundedSafeString(value: unknown, maximumBytes: number): value is string {
   return (
     typeof value === "string" &&
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
+    value.trim().length > 0 &&
+    !value.includes("\0") &&
+    fitsUtf8(value, maximumBytes) &&
+    redact(value).replacementCount === 0
   );
-}
-
-function safeString(value: unknown): value is string {
-  return typeof value === "string" && redact(value).replacementCount === 0;
-}
-
-function boundedSafeString(value: unknown, maximumBytes: number): value is string {
-  return safeString(value) && Buffer.byteLength(value, "utf8") <= maximumBytes;
 }
 
 export function isPublishedObservation(value: unknown): value is PublishedObservation {
   const item = record(value);
 
-  if (item === null || !exactKeys(item, observationKeys)) {
+  if (item === null || !hasExactKeys(item, observationKeys)) {
     return false;
   }
 
@@ -60,27 +65,32 @@ export function isPublishedObservation(value: unknown): value is PublishedObserv
     item["schemaVersion"] === 1 &&
     typeof item["observationId"] === "string" &&
     /^fr_[0-9a-f]{32}$/.test(item["observationId"]) &&
-    timestamp(item["createdAt"]) &&
+    isRfc3339UtcMilliseconds(item["createdAt"]) &&
     (item["status"] === "open" || item["status"] === "resolved") &&
-    boundedSafeString(item["body"], 4_096) &&
+    boundedSafeString(item["body"], BODY_MAX_BYTES) &&
     typeof source === "string" &&
     isSource(source) &&
-    (item["model"] === null || boundedSafeString(item["model"], 128)) &&
+    (item["model"] === null || boundedSafeString(item["model"], MODEL_MAX_BYTES)) &&
     (area === null || (typeof area === "string" && isArea(area))) &&
     Array.isArray(impacts) &&
     impacts.every((impact) => typeof impact === "string" && isImpact(impact)) &&
     new Set(impacts).size === impacts.length &&
     repository !== null &&
-    exactKeys(repository, ["name", "branch", "cwdRelative"]) &&
-    boundedSafeString(repository["name"], 255) &&
-    (repository["branch"] === null || boundedSafeString(repository["branch"], 512)) &&
-    boundedSafeString(repository["cwdRelative"], 2_048) &&
+    hasExactKeys(repository, ["name", "branch", "cwdRelative"]) &&
+    boundedSafeString(repository["name"], REPOSITORY_NAME_MAX_BYTES) &&
+    (repository["branch"] === null ||
+      boundedSafeString(repository["branch"], BRANCH_MAX_BYTES)) &&
+    boundedSafeString(repository["cwdRelative"], CWD_RELATIVE_MAX_BYTES) &&
     (resolution === null ||
-      (exactKeys(resolution, ["createdAt", "note", "verification"]) &&
-        timestamp(resolution["createdAt"]) &&
-        (resolution["note"] === null || boundedSafeString(resolution["note"], 2_048)) &&
+      (hasExactKeys(resolution, ["createdAt", "note", "verification"]) &&
+        isRfc3339UtcMilliseconds(resolution["createdAt"]) &&
+        (resolution["note"] === null ||
+          boundedSafeString(resolution["note"], LIFECYCLE_NOTE_MAX_BYTES)) &&
         (resolution["verification"] === null ||
-          boundedSafeString(resolution["verification"], 512)))) &&
+          boundedSafeString(
+            resolution["verification"],
+            LIFECYCLE_VERIFICATION_MAX_BYTES,
+          )))) &&
     ((item["status"] === "open" && resolution === null) ||
       (item["status"] === "resolved" && resolution !== null)) &&
     Number.isSafeInteger(item["redactionCount"]) &&

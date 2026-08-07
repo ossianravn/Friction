@@ -177,11 +177,11 @@ export async function runDoctor(cwd: string = process.cwd()): Promise<DoctorChec
   checks.push(await probeTemporaryDirectory(paths.temporary));
   const repository = await discoverRepository(cwd);
   checks.push(
-    repository.context === null
+    repository.state !== "repository"
       ? {
           name: "repository",
-          status: repository.warning ? "warn" : "ok",
-          message: repository.warning
+          status: repository.state === "repository-unavailable" ? "warn" : "ok",
+          message: repository.state === "repository-unavailable"
             ? "Repository attribution is unavailable."
             : "No current repository detected.",
         }

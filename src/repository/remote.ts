@@ -1,4 +1,7 @@
-const REMOTE_MAX_BYTES = 4_096;
+import {
+  fitsUtf8,
+  REPOSITORY_IDENTITY_MAX_BYTES,
+} from "../domain/limits.js";
 
 export type NormalizedRemote = {
   identity: string;
@@ -32,7 +35,7 @@ function resultFor(host: string, port: string, pathname: string): NormalizedRemo
 
   const identity = `${host.toLowerCase()}${port.length > 0 ? `:${port}` : ""}/${repositoryPath}`;
 
-  if (Buffer.byteLength(identity, "utf8") > REMOTE_MAX_BYTES) {
+  if (!fitsUtf8(identity, REPOSITORY_IDENTITY_MAX_BYTES)) {
     return null;
   }
 
@@ -43,7 +46,7 @@ function resultFor(host: string, port: string, pathname: string): NormalizedRemo
 }
 
 export function normalizeRemote(value: string): NormalizedRemote | null {
-  if (value.includes("\0") || Buffer.byteLength(value, "utf8") > REMOTE_MAX_BYTES) {
+  if (value.includes("\0") || !fitsUtf8(value, REPOSITORY_IDENTITY_MAX_BYTES)) {
     return null;
   }
 

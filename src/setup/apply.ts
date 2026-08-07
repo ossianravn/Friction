@@ -8,7 +8,18 @@ import {
   rejectUnsafeStoreDirectory,
   resolveFrictionPaths,
 } from "../storage/paths.js";
-import { inspectSetupFile, sameSnapshot } from "./files.js";
+import {
+  compareSetupPaths,
+  createSetupDirectories,
+  plannedSetupDirectories,
+  removeSetupDirectories,
+} from "./directories.js";
+import {
+  assertSetupRoot,
+  inspectSetupFile,
+  sameSnapshot,
+} from "./files.js";
+import { assertSetupPreconditions } from "./preconditions.js";
 import type { SetupPlan, SetupTarget } from "./types.js";
 
 type StagedTarget = {
@@ -20,7 +31,7 @@ function isCode(error: unknown, code: string): boolean {
   return error !== null && typeof error === "object" && "code" in error && error.code === code;
 }
 
-async function acquireLock(scopeRoot: string): Promise<{
+async function acquireLock(plan: SetupPlan): Promise<{
   release(): Promise<void>;
 }> {
   const paths = resolveFrictionPaths();
@@ -35,8 +46,12 @@ async function acquireLock(scopeRoot: string): Promise<{
   await rejectUnsafeStoreDirectory(lockRoot);
   await mkdir(lockRoot, { recursive: true, mode: 0o700 });
   await rejectUnsafeStoreDirectory(lockRoot);
-  const screened = redact(scopeRoot);
-  const key = createHash("sha256").update(screened.text).digest("hex");
+  const lockIdentity = JSON.stringify({
+    harness: plan.harness,
+    scope: plan.scope,
+    roots: [...new Set(plan.lockRoots)].sort().map((root) => redact(root).text),
+  });
+  const key = createHash("sha256").update(lockIdentity).digest("hex");
   const lockPath = path.join(lockRoot, `${key}.lock`);
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -61,13 +76,19 @@ async function acquireLock(scopeRoot: string): Promise<{
 }
 
 async function assertCurrent(plan: SetupPlan): Promise<void> {
+  for (const root of plan.lockRoots) {
+    await assertSetupRoot(root);
+  }
+
   for (const target of plan.targets) {
-    const current = await inspectSetupFile(plan.scopeRoot, target.path);
+    const current = await inspectSetupFile(target.scopeRoot, target.path);
 
     if (!sameSnapshot(current, target.snapshot)) {
       throw new FrictionFailure("setup_conflict");
     }
   }
+
+  await assertSetupPreconditions(plan.preconditions);
 }
 
 async function stageTarget(
@@ -79,11 +100,8 @@ async function stageTarget(
   }
 
   const parent = path.dirname(target.path);
-  await mkdir(parent, {
-    recursive: true,
-    mode: plan.scope === "user" ? 0o700 : 0o755,
-  });
-  const current = await inspectSetupFile(plan.scopeRoot, target.path);
+  await assertSetupRoot(target.scopeRoot);
+  const current = await inspectSetupFile(target.scopeRoot, target.path);
 
   if (!sameSnapshot(current, target.snapshot)) {
     throw new FrictionFailure("setup_conflict");
@@ -114,7 +132,8 @@ async function commitTarget(plan: SetupPlan, staged: StagedTarget): Promise<void
     return;
   }
 
-  const current = await inspectSetupFile(plan.scopeRoot, target.path);
+  await assertSetupRoot(target.scopeRoot);
+  const current = await inspectSetupFile(target.scopeRoot, target.path);
 
   if (!sameSnapshot(current, target.snapshot)) {
     throw new FrictionFailure("setup_conflict");
@@ -149,20 +168,47 @@ export async function applySetupPlan(plan: SetupPlan): Promise<void> {
     throw new FrictionFailure("setup_conflict");
   }
 
-  const lock = await acquireLock(plan.scopeRoot);
+  const lock = await acquireLock(plan);
   const staged: StagedTarget[] = [];
+  const createdDirectories: string[] = [];
+  let committedCount = 0;
+  let instructionPreconditionsChecked = false;
 
   try {
     await assertCurrent(plan);
+    const directories = await plannedSetupDirectories(plan);
+    await assertCurrent(plan);
+    await createSetupDirectories(
+      directories,
+      plan.scope === "user" ? 0o700 : 0o755,
+      createdDirectories,
+    );
 
-    for (const target of plan.targets) {
+    const orderedTargets = [...plan.targets].sort((left, right) =>
+      compareSetupPaths(left.path, right.path),
+    );
+
+    for (const target of orderedTargets) {
       staged.push(await stageTarget(plan, target));
     }
 
     await assertCurrent(plan);
 
     for (const target of staged) {
+      if (
+        target.target.kind === "managed-block" &&
+        target.target.state !== "noop" &&
+        !instructionPreconditionsChecked
+      ) {
+        await assertSetupPreconditions(plan.preconditions);
+        instructionPreconditionsChecked = true;
+      }
+
       await commitTarget(plan, target);
+
+      if (target.target.state !== "noop") {
+        committedCount += 1;
+      }
     }
   } catch (error) {
     if (error instanceof FrictionFailure) {
@@ -175,6 +221,10 @@ export async function applySetupPlan(plan: SetupPlan): Promise<void> {
       if (target.temporaryPath !== null) {
         await unlink(target.temporaryPath).catch(() => undefined);
       }
+    }
+
+    if (committedCount === 0) {
+      await removeSetupDirectories(createdDirectories);
     }
 
     await lock.release();

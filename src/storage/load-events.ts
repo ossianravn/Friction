@@ -2,10 +2,8 @@ import { constants } from "node:fs";
 import { open, readdir } from "node:fs/promises";
 import path from "node:path";
 
-import {
-  isFrictionEvent,
-  type FrictionEvent,
-} from "../domain/events.js";
+import { isFrictionEvent } from "../domain/event-validation.js";
+import type { FrictionEvent } from "../domain/events.js";
 import { FrictionFailure } from "../domain/failures.js";
 import { compareText } from "../domain/sort.js";
 import { screenLoadedEvent } from "../security/screen-event.js";
@@ -159,8 +157,14 @@ function parseEvent(
   const allowedKeys = new Set(expectedKeys(value));
   const hasUnknownProperties = Object.keys(record).some((key) => !allowedKeys.has(key));
 
+  const screened = screenLoadedEvent(value);
+
+  if (!isFrictionEvent(screened)) {
+    return { loaded: null, finding: finding(fileName, "invalid-event", record) };
+  }
+
   return {
-    loaded: { event: screenLoadedEvent(value), fileName, bytes },
+    loaded: { event: screened, fileName, bytes },
     finding: hasUnknownProperties
       ? finding(fileName, "unknown-properties", record)
       : null,

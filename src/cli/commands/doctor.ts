@@ -1,4 +1,5 @@
 import { runDoctor } from "../../doctor/checks.js";
+import { exitCodes } from "../exit-codes.js";
 import type { CommandExecution } from "./types.js";
 
 export async function executeDoctor(): Promise<CommandExecution> {
@@ -13,6 +14,6 @@ export async function executeDoctor(): Promise<CommandExecution> {
     data: { checks },
     human,
     warnings: [],
-    exitCode: hasError ? 1 : 0,
+    exitCode: hasError ? exitCodes.internalOrIo : exitCodes.success,
   };
 }

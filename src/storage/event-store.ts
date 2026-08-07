@@ -1,7 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
-import { isFrictionEvent, type FrictionEvent } from "../domain/events.js";
+import { isFrictionEvent } from "../domain/event-validation.js";
+import type { FrictionEvent } from "../domain/events.js";
 import { FrictionFailure } from "../domain/failures.js";
 import { installPrivateFileExclusively } from "../platform/fs.js";
 import { createEventId } from "../platform/ids.js";

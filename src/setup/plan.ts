@@ -1,4 +1,3 @@
-import { realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -9,13 +8,15 @@ import {
   loadSetupAssets,
   packagedSkillPaths,
 } from "./assets.js";
-import { inspectSetupFile } from "./files.js";
+import { canonicalizeSetupRoot, inspectSetupFile } from "./files.js";
+import { activeCodexInstructionPath } from "./preconditions.js";
 import { planManagedBlock, planOwnedFile } from "./target-plan.js";
 import type {
   MutationState,
   SetupData,
   SetupHarness,
   SetupPlan,
+  SetupPrecondition,
   SetupScope,
   SetupTarget,
 } from "./types.js";
@@ -30,24 +31,39 @@ function overallState(targets: readonly SetupTarget[]): MutationState {
   return "noop";
 }
 
-async function codexTargets(
-  scopeRoot: string,
+async function addCodexTargets(
+  targets: SetupTarget[],
+  preconditions: SetupPrecondition[],
   instructionRoot: string,
   undo: boolean,
-): Promise<string[]> {
+  instruction: Buffer,
+): Promise<void> {
   const override = path.join(instructionRoot, "AGENTS.override.md");
   const agents = path.join(instructionRoot, "AGENTS.md");
+  const overrideSnapshot = await inspectSetupFile(instructionRoot, override);
+  const agentsSnapshot = await inspectSetupFile(instructionRoot, agents);
+  const selectedPath = activeCodexInstructionPath(override, overrideSnapshot, agents);
+  preconditions.push({
+    kind: "codex-instruction-precedence",
+    scopeRoot: instructionRoot,
+    overridePath: override,
+    overrideSnapshot,
+    agentsPath: agents,
+    agentsSnapshot,
+    selectedPath,
+  });
 
-  if (undo) {
-    return [override, agents];
+  for (const instructionPath of undo ? [override, agents] : [selectedPath]) {
+    targets.push(
+      await planManagedBlock(
+        instructionRoot,
+        instructionPath,
+        instruction,
+        undo,
+        instructionPath === override ? overrideSnapshot : agentsSnapshot,
+      ),
+    );
   }
-
-  const overrideSnapshot = await inspectSetupFile(scopeRoot, override);
-  return [
-    overrideSnapshot.exists && overrideSnapshot.bytes.toString("utf8").trim().length > 0
-      ? override
-      : agents,
-  ];
 }
 
 async function addSkillTargets(
@@ -60,6 +76,7 @@ async function addSkillTargets(
   for (const asset of skills) {
     targets.push(
       await planOwnedFile(
+        asset.assetId,
         scopeRoot,
         path.join(skillsRoot, asset.relativePath),
         asset.bytes,
@@ -83,35 +100,35 @@ export async function buildSetupPlan(input: {
     return {
       harness: "generic",
       scope: input.scope,
-      scopeRoot: input.cwd,
+      lockRoots: [],
       undo: false,
       targets: [],
+      preconditions: [],
       snippet: `printf '%s\\n' "<what you were doing -> obstacle/effect -> likely prevention>" | friction add --stdin --source generic\nSkills: ${packagedSkillPaths().join(", ")}`,
     };
   }
 
-  const userHome = await realpath(homedir());
+  const userHome = await canonicalizeSetupRoot(homedir());
   const scopeRoot = input.scope === "user" ? userHome : await requireWorktreeRoot(input.cwd);
   const assets = await loadSetupAssets();
   const targets: SetupTarget[] = [];
+  const preconditions: SetupPrecondition[] = [];
 
   if (input.harness === "codex") {
-    const instructionRoot =
+    const requestedInstructionRoot =
       input.scope === "user"
         ? path.resolve(process.env["CODEX_HOME"] || path.join(userHome, ".codex"))
         : scopeRoot;
-    const instructionPaths = await codexTargets(scopeRoot, instructionRoot, input.undo);
-
-    for (const instructionPath of instructionPaths) {
-      targets.push(
-        await planManagedBlock(
-          scopeRoot,
-          instructionPath,
-          captureInstruction(assets.captureTemplate, "codex"),
-          input.undo,
-        ),
-      );
-    }
+    const instructionRoot = input.scope === "user"
+      ? await canonicalizeSetupRoot(requestedInstructionRoot)
+      : requestedInstructionRoot;
+    await addCodexTargets(
+      targets,
+      preconditions,
+      instructionRoot,
+      input.undo,
+      captureInstruction(assets.captureTemplate, "codex"),
+    );
     const skillsRoot =
       input.scope === "user"
         ? path.join(userHome, ".agents", "skills")
@@ -122,6 +139,7 @@ export async function buildSetupPlan(input: {
       input.scope === "user" ? path.join(userHome, ".claude") : path.join(scopeRoot, ".claude");
     targets.push(
       await planOwnedFile(
+        "claude-rule",
         scopeRoot,
         path.join(claudeRoot, "rules", "friction.md"),
         captureInstruction(assets.captureTemplate, "claude-code"),
@@ -140,9 +158,10 @@ export async function buildSetupPlan(input: {
   return {
     harness: input.harness,
     scope: input.scope,
-    scopeRoot,
+    lockRoots: [...new Set(targets.map((target) => target.scopeRoot))].sort(),
     undo: input.undo,
     targets,
+    preconditions,
     snippet: null,
   };
 }

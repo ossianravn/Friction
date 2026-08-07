@@ -9,17 +9,30 @@ const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 
 async function run(command, arguments_, options = {}) {
   return new Promise((resolve, reject) => {
+    const hasInput = options.input !== undefined;
     const child = spawn(command, arguments_, {
       cwd: options.cwd ?? repositoryRoot,
       env: options.env ?? process.env,
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: [hasInput ? "pipe" : "ignore", "pipe", "pipe"],
     });
     const stdout = [];
     const stderr = [];
+    let settled = false;
+    const fail = (error) => {
+      if (!settled) {
+        settled = true;
+        reject(error);
+      }
+    };
     child.stdout.on("data", (chunk) => stdout.push(chunk));
     child.stderr.on("data", (chunk) => stderr.push(chunk));
-    child.on("error", reject);
+    child.on("error", fail);
     child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
       const result = {
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
@@ -31,7 +44,15 @@ async function run(command, arguments_, options = {}) {
         reject(new Error(`${command} exited ${code}: ${result.stderr}`));
       }
     });
-    child.stdin.end(options.input ?? "");
+
+    if (hasInput) {
+      child.stdin.on("error", (error) => {
+        if (error.code !== "EPIPE") {
+          fail(error);
+        }
+      });
+      child.stdin.end(options.input);
+    }
   });
 }
 
@@ -78,6 +99,25 @@ try {
   };
   const version = await run(binary, ["--version"], { cwd: workingDirectory, env: environment });
   assert.equal(version.stdout.trim(), "0.0.0");
+  const help = await run(binary, ["--help"], { cwd: workingDirectory, env: environment });
+  assert.match(help.stdout, /add\s+Record one screened observation/);
+  const setupHelp = await run(binary, ["setup", "--help"], {
+    cwd: workingDirectory,
+    env: environment,
+  });
+  assert.match(setupHelp.stdout, /--apply/);
+  assert.match(setupHelp.stdout, /[Pp]review/);
+  const schemaEnvelope = JSON.parse(
+    (await run(binary, ["schema"], { cwd: workingDirectory, env: environment })).stdout,
+  );
+  const schema = schemaEnvelope.data;
+  assert.equal(schema.commands.publish.effects.writesRepository, true);
+  assert.equal(schema.commands.setup.effects.previewDefault, true);
+  assert.equal(schema.events.reopened.fields.includes("verification"), false);
+  assert.equal(schema.environment.includes("CODEX_HOME"), true);
+  assert.equal(schema.byteLimits.body, 4_096);
+  assert.equal(schema.errors.io_error.message, "An I/O operation failed.");
+  assert.equal(schema.errors.io_error.retryable, false);
   const body = "Packaged capture found an undocumented working-directory assumption.";
   const added = await run(
     binary,

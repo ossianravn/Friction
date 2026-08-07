@@ -5,6 +5,7 @@ import path from "node:path";
 const packageRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 export type SkillAsset = {
+  assetId: string;
   relativePath: string;
   bytes: Buffer;
 };
@@ -30,7 +31,11 @@ async function readDirectory(
     if (entry.isDirectory()) {
       assets.push(...(await readDirectory(absolutePath, relativePath)));
     } else if (entry.isFile()) {
-      assets.push({ relativePath, bytes: await readFile(absolutePath) });
+      assets.push({
+        assetId: relativePath.split(path.sep).join("/"),
+        relativePath,
+        bytes: await readFile(absolutePath),
+      });
     }
   }
 
@@ -50,6 +55,7 @@ export async function loadSetupAssets(): Promise<SetupAssets> {
 
     for (const file of files) {
       skills.push({
+        assetId: `${skillName}/${file.assetId}`,
         relativePath: path.join(skillName, file.relativePath),
         bytes: file.bytes,
       });

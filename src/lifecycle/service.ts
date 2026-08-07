@@ -4,6 +4,10 @@ import {
   type Source,
 } from "../domain/events.js";
 import { FrictionFailure } from "../domain/failures.js";
+import {
+  LIFECYCLE_NOTE_MAX_BYTES,
+  LIFECYCLE_VERIFICATION_MAX_BYTES,
+} from "../domain/limits.js";
 import { systemClock, type Clock } from "../platform/clock.js";
 import { createEventId } from "../platform/ids.js";
 import { redact } from "../security/redact.js";
@@ -12,9 +16,6 @@ import { loadEvents } from "../storage/load-events.js";
 import { resolveFrictionPaths } from "../storage/paths.js";
 import { CLI_VERSION } from "../version.js";
 import { foldEvents } from "./fold.js";
-
-const NOTE_MAX_BYTES = 2_048;
-const VERIFICATION_MAX_BYTES = 512;
 
 export type LifecycleInput = {
   action: "resolve" | "reopen";
@@ -84,9 +85,9 @@ export async function changeLifecycle(
     throw new FrictionFailure("invalid_input");
   }
 
-  const note = screen(validateOptionalText(input.note, NOTE_MAX_BYTES));
+  const note = screen(validateOptionalText(input.note, LIFECYCLE_NOTE_MAX_BYTES));
   const verification = screen(
-    validateOptionalText(input.verification, VERIFICATION_MAX_BYTES),
+    validateOptionalText(input.verification, LIFECYCLE_VERIFICATION_MAX_BYTES),
   );
   const paths = resolveFrictionPaths();
   const loaded = await loadEvents(paths);

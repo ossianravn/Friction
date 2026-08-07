@@ -124,6 +124,8 @@ test("loaded legacy event text is re-screened before every public view", async (
 
 test("redaction-sensitive local Git paths fail attribution instead of sharing a key", async () => {
   const context = await makeAcceptanceFixture("friction-local-identity-");
+  const unsafeBody = "Local identity could not be retained safely.";
+  const safeBody = "A separate repository observation must not leak into default reads.";
   const repositories = [
     path.join(context.root, "api_token=A", "repo"),
     path.join(context.root, "api_token=B", "repo"),
@@ -136,11 +138,16 @@ test("redaction-sensitive local Git paths fail attribution instead of sharing a 
       arguments: ["add", "--stdin", "--json"],
       cwd: repository,
       home: context.home,
-      stdin: "Local identity could not be retained safely.",
+      stdin: unsafeBody,
     });
     assert.equal(result.code, 0);
     assert.equal(envelope(result).warnings[0]?.["code"], "repository_unavailable");
   }
+
+  const safeRepository = path.join(context.root, "safe-repository");
+  await mkdir(safeRepository);
+  await runGit(safeRepository, ["init", "--quiet"]);
+  await addObservation(context.home, safeRepository, safeBody);
 
   const stored = await Promise.all(
     (await eventNames(context.home)).map(async (name) =>
@@ -149,9 +156,142 @@ test("redaction-sensitive local Git paths fail attribution instead of sharing a 
       ) as Record<string, unknown>,
     ),
   );
-  assert.equal(stored.length, 2);
-  assert.equal(stored.every((event) => event["repository"] === null), true);
+  assert.equal(stored.length, 3);
+  assert.equal(
+    stored.filter((event) => event["repository"] === null).length,
+    2,
+  );
   const bytes = JSON.stringify(stored);
   assert.equal(bytes.includes("api_token=A"), false);
   assert.equal(bytes.includes("api_token=B"), false);
+
+  const implicitReads = [
+    ["list", "--status", "all", "--json"],
+    ["stats", "--status", "all", "--json"],
+    ["export", "--status", "all", "--format", "jsonl", "--json"],
+  ];
+
+  for (const arguments_ of implicitReads) {
+    const result = await runFriction({
+      arguments: arguments_,
+      cwd: repositories[0]!,
+      home: context.home,
+    });
+    assert.equal(result.code, 3);
+    assert.equal(`${result.stdout}${result.stderr}`.includes(safeBody), false);
+    assert.equal(`${result.stdout}${result.stderr}`.includes(unsafeBody), false);
+  }
+
+  const failedGitBody = "Capture remains safe when Git command setup is invalid.";
+  const failedGitEnvironment = {
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "broken",
+    GIT_CONFIG_VALUE_0: "value",
+  };
+
+  for (const arguments_ of implicitReads) {
+    const result = await runFriction({
+      arguments: arguments_,
+      cwd: safeRepository,
+      environment: failedGitEnvironment,
+      home: context.home,
+    });
+    assert.equal(result.code, 3);
+    assert.equal(`${result.stdout}${result.stderr}`.includes(safeBody), false);
+    assert.equal(`${result.stdout}${result.stderr}`.includes(unsafeBody), false);
+  }
+
+  const failedGitCapture = await runFriction({
+    arguments: ["add", "--stdin", "--json"],
+    cwd: safeRepository,
+    environment: failedGitEnvironment,
+    home: context.home,
+    stdin: failedGitBody,
+  });
+  assert.equal(failedGitCapture.code, 0);
+  assert.equal(
+    envelope(failedGitCapture).warnings[0]?.["code"],
+    "repository_unavailable",
+  );
+
+  const failedRemoteBody = "A failed remote lookup must not change repository identity.";
+  const failedRemoteRepository = path.join(context.root, "failed-remote");
+  await mkdir(failedRemoteRepository);
+  await runGit(failedRemoteRepository, ["init", "--quiet"]);
+  await runGit(failedRemoteRepository, [
+    "remote",
+    "add",
+    "origin",
+    "https://example.com/owner/repository.git",
+  ]);
+  const originalPath = process.env["PATH"];
+  assert.ok(originalPath);
+  const fakeGitDirectory = path.join(context.root, "fake-git");
+  await mkdir(fakeGitDirectory);
+  await writeFile(
+    path.join(fakeGitDirectory, "git"),
+    [
+      "#!/bin/sh",
+      'if [ "$1" = "remote" ] && [ "$2" = "get-url" ]; then',
+      "  exit 1",
+      "fi",
+      'PATH="$FRICTION_TEST_REAL_PATH" exec git "$@"',
+      "",
+    ].join("\n"),
+    { mode: 0o700 },
+  );
+  const failedRemoteEnvironment = {
+    FRICTION_TEST_REAL_PATH: originalPath,
+    PATH: `${fakeGitDirectory}${path.delimiter}${originalPath}`,
+  };
+  const failedRemoteCapture = await runFriction({
+    arguments: ["add", "--stdin", "--json"],
+    cwd: failedRemoteRepository,
+    environment: failedRemoteEnvironment,
+    home: context.home,
+    stdin: failedRemoteBody,
+  });
+  assert.equal(failedRemoteCapture.code, 0);
+  assert.equal(
+    envelope(failedRemoteCapture).warnings[0]?.["code"],
+    "repository_unavailable",
+  );
+
+  const failedRemoteRead = await runFriction({
+    arguments: ["list", "--status", "all", "--json"],
+    cwd: failedRemoteRepository,
+    environment: failedRemoteEnvironment,
+    home: context.home,
+  });
+  assert.equal(failedRemoteRead.code, 3);
+  assert.equal(failedRemoteRead.stdout.includes(safeBody), false);
+
+  const updatedStored = await Promise.all(
+    (await eventNames(context.home)).map(async (name) =>
+      JSON.parse(
+        await readFile(path.join(context.home, "v1", "events", name), "utf8"),
+      ) as Record<string, unknown>,
+    ),
+  );
+  assert.equal(updatedStored.length, 5);
+  assert.equal(
+    updatedStored
+      .filter((event) =>
+        [failedGitBody, failedRemoteBody].includes(event["body"] as string),
+      )
+      .every((event) => event["repository"] === null),
+    true,
+  );
+
+  const explicitAll = await runFriction({
+    arguments: ["list", "--repo", "all", "--status", "all", "--json"],
+    cwd: repositories[0]!,
+    home: context.home,
+  });
+  assert.equal(explicitAll.code, 0);
+  const allRecords = envelope(explicitAll).data["records"] as Array<
+    Record<string, unknown>
+  >;
+  assert.equal(allRecords.length, 5);
+  assert.equal(allRecords.some((record) => record["body"] === safeBody), true);
 });

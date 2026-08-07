@@ -11,6 +11,7 @@ export type FileSnapshot = {
 };
 
 export type SetupTarget = {
+  scopeRoot: string;
   path: string;
   kind: SetupTargetKind;
   snapshot: FileSnapshot;
@@ -18,12 +19,25 @@ export type SetupTarget = {
   state: MutationState;
 };
 
+export type CodexInstructionPrecondition = {
+  kind: "codex-instruction-precedence";
+  scopeRoot: string;
+  overridePath: string;
+  overrideSnapshot: FileSnapshot;
+  agentsPath: string;
+  agentsSnapshot: FileSnapshot;
+  selectedPath: string;
+};
+
+export type SetupPrecondition = CodexInstructionPrecondition;
+
 export type SetupPlan = {
   harness: SetupHarness;
   scope: SetupScope;
-  scopeRoot: string;
+  lockRoots: string[];
   undo: boolean;
   targets: SetupTarget[];
+  preconditions: SetupPrecondition[];
   snippet: string | null;
 };
 

@@ -11,6 +11,7 @@ import { executePublish } from "./commands/publish.js";
 import { executeList, executeStats } from "./commands/read.js";
 import { executeSetup } from "./commands/setup.js";
 import type { CommandExecution } from "./commands/types.js";
+import { commandContract, commandNames } from "./contract.js";
 import { errorRegistry } from "./errors.js";
 import {
   writeHumanError,
@@ -34,20 +35,7 @@ export type CliIo = {
 
 function commandName(arguments_: readonly string[]): CommandName {
   const command = arguments_[0];
-  const implemented: readonly ImplementedCommand[] = [
-    "add",
-    "list",
-    "stats",
-    "resolve",
-    "reopen",
-    "export",
-    "publish",
-    "purge",
-    "doctor",
-    "setup",
-    "schema",
-  ];
-  return command !== undefined && implemented.includes(command as ImplementedCommand)
+  return command !== undefined && commandNames.includes(command as ImplementedCommand)
     ? (command as ImplementedCommand)
     : "unknown";
 }
@@ -58,11 +46,23 @@ function wantsJson(arguments_: readonly string[]): boolean {
 
 function writeHelp(output: WritableOutput, command: ImplementedCommand | null): void {
   if (command !== null) {
-    output.write(`Usage: friction ${command} [options]\n`);
+    const contract = commandContract[command];
+    const options = contract.options.length === 0
+      ? ""
+      : `\nOptions:\n${contract.options
+          .map((option) => `  ${option.name}\n      ${option.description}`)
+          .join("\n")}\n`;
+    output.write(
+      `${contract.purpose}\n\nUsage:\n${contract.syntax.map((syntax) => `  ${syntax}`).join("\n")}${options}\nNotes:\n${contract.notes.map((note) => `  ${note}`).join("\n")}\n`,
+    );
     return;
   }
 
-  output.write("Usage: friction <command>\n\nCommands:\n  add\n  list\n  stats\n  resolve\n  reopen\n  export\n  publish\n  purge\n  doctor\n  setup\n  schema\n");
+  output.write(
+    `Usage: friction <command> [options]\n\nCommands:\n${commandNames
+      .map((name) => `  ${name.padEnd(8)} ${commandContract[name].purpose}`)
+      .join("\n")}\n\nCommon options: --help, --version, --json\n`,
+  );
 }
 
 function failureCode(error: unknown): FailureCode {

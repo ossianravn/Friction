@@ -4,20 +4,29 @@ import path from "node:path";
 
 import type { RepositoryContext } from "../domain/events.js";
 import { FrictionFailure } from "../domain/failures.js";
+import {
+  BRANCH_MAX_BYTES,
+  CWD_RELATIVE_MAX_BYTES,
+  fitsUtf8,
+  REPOSITORY_IDENTITY_MAX_BYTES,
+  REPOSITORY_NAME_MAX_BYTES,
+} from "../domain/limits.js";
 import { runGit, type GitCommandResult } from "../platform/git.js";
 import { redact } from "../security/redact.js";
 import { normalizeRemote, type NormalizedRemote } from "./remote.js";
 
-const NAME_MAX_BYTES = 255;
-const BRANCH_MAX_BYTES = 512;
-const RELATIVE_PATH_MAX_BYTES = 2_048;
-const LOCAL_IDENTITY_MAX_BYTES = 4_096;
+export type RepositoryDiscovery =
+  | { state: "not-repository"; replacementCount: 0 }
+  | {
+      state: "repository";
+      context: RepositoryContext;
+      replacementCount: number;
+    }
+  | { state: "repository-unavailable"; replacementCount: number };
 
-export type RepositoryDiscovery = {
-  context: RepositoryContext | null;
-  replacementCount: number;
-  warning: boolean;
-};
+type RemoteDiscovery =
+  | { state: "available"; remote: NormalizedRemote | null }
+  | { state: "unavailable" };
 
 function text(result: GitCommandResult): string | null {
   return result.status === "ok" ? result.stdout.trim() : null;
@@ -25,10 +34,6 @@ function text(result: GitCommandResult): string | null {
 
 function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
-}
-
-function fits(value: string, maximumBytes: number): boolean {
-  return Buffer.byteLength(value, "utf8") <= maximumBytes;
 }
 
 function screen(value: string): ReturnType<typeof redact> {
@@ -39,16 +44,18 @@ function screen(value: string): ReturnType<typeof redact> {
   }
 }
 
-async function selectedRemote(cwd: string): Promise<NormalizedRemote | null> {
+async function selectedRemote(cwd: string): Promise<RemoteDiscovery> {
   const namesResult = await runGit(["remote"], cwd);
-  const names = text(namesResult)
-    ?.split("\n")
+
+  if (namesResult.status !== "ok") {
+    return { state: "unavailable" };
+  }
+
+  const names = namesResult.stdout
+    .trim()
+    .split("\n")
     .map((name) => name.trim())
     .filter((name) => name.length > 0);
-
-  if (names === undefined) {
-    return null;
-  }
 
   const selectedName = names.includes("origin")
     ? "origin"
@@ -57,17 +64,25 @@ async function selectedRemote(cwd: string): Promise<NormalizedRemote | null> {
       : undefined;
 
   if (selectedName === undefined) {
-    return null;
+    return { state: "available", remote: null };
   }
 
-  const url = text(await runGit(["remote", "get-url", selectedName], cwd));
-  return url === null ? null : normalizeRemote(url);
+  const urlResult = await runGit(["remote", "get-url", selectedName], cwd);
+
+  if (urlResult.status !== "ok") {
+    return { state: "unavailable" };
+  }
+
+  return {
+    state: "available",
+    remote: normalizeRemote(urlResult.stdout.trim()),
+  };
 }
 
 async function localIdentity(
   commonDirectory: string,
 ): Promise<{ key: string; replacementCount: number } | null> {
-  if (!fits(commonDirectory, LOCAL_IDENTITY_MAX_BYTES)) {
+  if (!fitsUtf8(commonDirectory, REPOSITORY_IDENTITY_MAX_BYTES)) {
     return null;
   }
 
@@ -86,12 +101,15 @@ async function localIdentity(
 export async function discoverRepository(cwd: string): Promise<RepositoryDiscovery> {
   const topLevelResult = await runGit(["rev-parse", "--show-toplevel"], cwd);
 
-  if (topLevelResult.status === "failed") {
-    return { context: null, replacementCount: 0, warning: false };
+  if (
+    topLevelResult.status === "failed" &&
+    topLevelResult.reason === "not-repository"
+  ) {
+    return { state: "not-repository", replacementCount: 0 };
   }
 
-  if (topLevelResult.status === "unavailable") {
-    return { context: null, replacementCount: 0, warning: true };
+  if (topLevelResult.status !== "ok") {
+    return { state: "repository-unavailable", replacementCount: 0 };
   }
 
   const commonResult = await runGit(
@@ -100,7 +118,7 @@ export async function discoverRepository(cwd: string): Promise<RepositoryDiscove
   );
 
   if (commonResult.status !== "ok") {
-    return { context: null, replacementCount: 0, warning: true };
+    return { state: "repository-unavailable", replacementCount: 0 };
   }
 
   try {
@@ -114,12 +132,18 @@ export async function discoverRepository(cwd: string): Promise<RepositoryDiscove
       path.isAbsolute(relative) ||
       relative === ".." ||
       relative.startsWith(`..${path.sep}`) ||
-      !fits(cwdRelative, RELATIVE_PATH_MAX_BYTES)
+      !fitsUtf8(cwdRelative, CWD_RELATIVE_MAX_BYTES)
     ) {
-      return { context: null, replacementCount: 0, warning: true };
+      return { state: "repository-unavailable", replacementCount: 0 };
     }
 
-    const remote = await selectedRemote(cwd);
+    const remoteDiscovery = await selectedRemote(cwd);
+
+    if (remoteDiscovery.state === "unavailable") {
+      return { state: "repository-unavailable", replacementCount: 0 };
+    }
+
+    const remote = remoteDiscovery.remote;
     let replacementCount = 0;
     let key: string;
     let displayName: string;
@@ -135,7 +159,7 @@ export async function discoverRepository(cwd: string): Promise<RepositoryDiscove
         const local = await localIdentity(commonDirectory);
 
         if (local === null) {
-          return { context: null, replacementCount, warning: true };
+          return { state: "repository-unavailable", replacementCount };
         }
 
         key = local.key;
@@ -146,7 +170,7 @@ export async function discoverRepository(cwd: string): Promise<RepositoryDiscove
       const local = await localIdentity(commonDirectory);
 
       if (local === null) {
-        return { context: null, replacementCount, warning: true };
+        return { state: "repository-unavailable", replacementCount };
       }
 
       key = local.key;
@@ -160,10 +184,10 @@ export async function discoverRepository(cwd: string): Promise<RepositoryDiscove
     const headValue = text(await runGit(["rev-parse", "--verify", "HEAD"], cwd));
 
     if (
-      !fits(displayName, NAME_MAX_BYTES) ||
-      (branchValue !== null && !fits(branchValue, BRANCH_MAX_BYTES))
+      !fitsUtf8(displayName, REPOSITORY_NAME_MAX_BYTES) ||
+      (branchValue !== null && !fitsUtf8(branchValue, BRANCH_MAX_BYTES))
     ) {
-      return { context: null, replacementCount, warning: true };
+      return { state: "repository-unavailable", replacementCount };
     }
 
     const name = screen(displayName);
@@ -175,6 +199,7 @@ export async function discoverRepository(cwd: string): Promise<RepositoryDiscove
       screenedCwd.replacementCount;
 
     return {
+      state: "repository",
       context: {
         key,
         name: name.text,
@@ -186,13 +211,12 @@ export async function discoverRepository(cwd: string): Promise<RepositoryDiscove
         cwdRelative: screenedCwd.text,
       },
       replacementCount,
-      warning: false,
     };
   } catch (error) {
     if (error instanceof FrictionFailure) {
       throw error;
     }
 
-    return { context: null, replacementCount: 0, warning: true };
+    return { state: "repository-unavailable", replacementCount: 0 };
   }
 }

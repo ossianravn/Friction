@@ -1,43 +1,57 @@
 import { FrictionFailure } from "../domain/failures.js";
-import { inspectSetupFile } from "./files.js";
+import { inspectSetupFile, setupFileDigest } from "./files.js";
+import { knownManagedDigests } from "./managed-assets.js";
 import { applyManagedBlock, removeManagedBlock } from "./managed-block.js";
-import type { SetupTarget } from "./types.js";
+import type { FileSnapshot, MutationState, SetupTarget } from "./types.js";
 
 function equal(left: Buffer, right: Buffer): boolean {
   return left.equals(right);
 }
 
 export async function planOwnedFile(
+  assetId: string,
   scopeRoot: string,
   targetPath: string,
   desired: Buffer,
   undo: boolean,
 ): Promise<SetupTarget> {
   const snapshot = await inspectSetupFile(scopeRoot, targetPath);
+  const desiredDigest = setupFileDigest(desired);
+  const knownDigests = knownManagedDigests(assetId);
 
-  if (undo) {
-    if (!snapshot.exists) {
-      return { path: targetPath, kind: "owned-file", snapshot, desiredBytes: null, state: "noop" };
-    }
-
-    if (!equal(snapshot.bytes, desired)) {
-      return { path: targetPath, kind: "owned-file", snapshot, desiredBytes: null, state: "conflict" };
-    }
-
-    return { path: targetPath, kind: "owned-file", snapshot, desiredBytes: null, state: "remove" };
-  }
-
-  if (!snapshot.exists) {
-    return { path: targetPath, kind: "owned-file", snapshot, desiredBytes: desired, state: "create" };
+  if (!knownDigests.includes(desiredDigest)) {
+    throw new FrictionFailure("internal_error");
   }
 
   return {
+    scopeRoot,
     path: targetPath,
     kind: "owned-file",
     snapshot,
-    desiredBytes: desired,
-    state: equal(snapshot.bytes, desired) ? "noop" : "conflict",
+    desiredBytes: undo ? null : desired,
+    state: ownedFileState(snapshot.digest, desiredDigest, knownDigests, undo),
   };
+}
+
+export function ownedFileState(
+  existingDigest: string | null,
+  desiredDigest: string,
+  knownDigests: readonly string[],
+  undo: boolean,
+): MutationState {
+  if (existingDigest === null) {
+    return undo ? "noop" : "create";
+  }
+
+  if (existingDigest === desiredDigest) {
+    return undo ? "remove" : "noop";
+  }
+
+  if (!knownDigests.includes(existingDigest)) {
+    return "conflict";
+  }
+
+  return undo ? "remove" : "update";
 }
 
 export async function planManagedBlock(
@@ -45,18 +59,20 @@ export async function planManagedBlock(
   targetPath: string,
   content: Buffer,
   undo: boolean,
+  knownSnapshot?: FileSnapshot,
 ): Promise<SetupTarget> {
-  const snapshot = await inspectSetupFile(scopeRoot, targetPath);
+  const snapshot = knownSnapshot ?? await inspectSetupFile(scopeRoot, targetPath);
 
   try {
     if (undo) {
       const desired = removeManagedBlock(snapshot.bytes);
 
       if (desired === null) {
-        return { path: targetPath, kind: "managed-block", snapshot, desiredBytes: null, state: "noop" };
+        return { scopeRoot, path: targetPath, kind: "managed-block", snapshot, desiredBytes: null, state: "noop" };
       }
 
       return {
+        scopeRoot,
         path: targetPath,
         kind: "managed-block",
         snapshot,
@@ -67,6 +83,7 @@ export async function planManagedBlock(
 
     const desired = applyManagedBlock(snapshot.bytes, content);
     return {
+      scopeRoot,
       path: targetPath,
       kind: "managed-block",
       snapshot,
@@ -79,7 +96,7 @@ export async function planManagedBlock(
     };
   } catch (error) {
     if (error instanceof FrictionFailure) {
-      return { path: targetPath, kind: "managed-block", snapshot, desiredBytes: null, state: "conflict" };
+      return { scopeRoot, path: targetPath, kind: "managed-block", snapshot, desiredBytes: null, state: "conflict" };
     }
 
     throw error;

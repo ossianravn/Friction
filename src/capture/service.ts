@@ -48,7 +48,7 @@ export async function captureObservation(
       throw error;
     }
 
-    repository = { context: null, replacementCount: 0, warning: true };
+    repository = { state: "repository-unavailable" as const, replacementCount: 0 };
   }
 
   const replacementCount =
@@ -66,7 +66,7 @@ export async function captureObservation(
     model: model?.text ?? null,
     area: input.area,
     impacts: input.impacts,
-    repository: repository.context,
+    repository: repository.state === "repository" ? repository.context : null,
     redaction: {
       rulesetVersion: 1,
       replacementCount,
@@ -85,12 +85,11 @@ export async function captureObservation(
       observationId: storedEvent.observationId,
       createdAt: storedEvent.createdAt,
       source: storedEvent.source,
-      repository:
-        storedEvent.repository === null
-          ? null
-          : { name: storedEvent.repository.name },
+      repository: storedEvent.repository === null
+        ? null
+        : { name: storedEvent.repository.name },
       redactionCount: replacementCount,
-      repositoryWarning: repository.warning,
+      repositoryWarning: repository.state === "repository-unavailable",
     };
   } catch (error) {
     if (error instanceof FrictionFailure) {

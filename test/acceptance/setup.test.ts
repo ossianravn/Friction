@@ -6,6 +6,7 @@ import test from "node:test";
 import { FrictionFailure } from "../../src/domain/failures.js";
 import { applySetupPlan } from "../../src/setup/apply.js";
 import { buildSetupPlan } from "../../src/setup/plan.js";
+import { ownedFileState } from "../../src/setup/target-plan.js";
 import { envelope, makeAcceptanceFixture } from "../support/acceptance.js";
 import { runFriction, runGit } from "../support/process.js";
 
@@ -34,7 +35,7 @@ async function treeBytes(root: string): Promise<Record<string, string>> {
 test("setup previews without writes and supports safe apply, repeat, undo, and conflicts", async () => {
   const context = await makeAcceptanceFixture("friction-setup-");
   const userHome = path.join(context.root, "user");
-  const codexHome = path.join(userHome, ".codex");
+  const codexHome = path.join(context.root, "custom-codex-home");
   const agentsFile = path.join(codexHome, "AGENTS.md");
   const environment = {
     HOME: userHome,
@@ -42,10 +43,12 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
     PATH: "/usr/bin:/bin",
   };
   const original = Buffer.from("# Existing\r\n\r\nKeep this byte-for-byte.", "utf8");
-  await mkdir(codexHome, { recursive: true });
+  await mkdir(userHome);
+  await mkdir(codexHome);
   await writeFile(agentsFile, original);
   await chmod(agentsFile, 0o666);
-  const beforePreview = await treeBytes(userHome);
+  const beforeUserPreview = await treeBytes(userHome);
+  const beforeCodexPreview = await treeBytes(codexHome);
 
   const preview = await runFriction({
     arguments: ["setup", "codex", "--json"],
@@ -55,7 +58,8 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
   });
   assert.equal(preview.code, 0);
   assert.equal(envelope(preview).data["action"], "preview-apply");
-  assert.deepEqual(await treeBytes(userHome), beforePreview);
+  assert.deepEqual(await treeBytes(userHome), beforeUserPreview);
+  assert.deepEqual(await treeBytes(codexHome), beforeCodexPreview);
   await assert.rejects(stat(context.home));
 
   const applied = await runFriction({
@@ -74,7 +78,8 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
   assert.equal((await readFile(reviewSkill, "utf8")).includes("name: friction-review"), true);
   assert.equal((await stat(reviewSkill)).mode & 0o777, 0o600);
 
-  const installedTree = await treeBytes(userHome);
+  const installedUserTree = await treeBytes(userHome);
+  const installedCodexTree = await treeBytes(codexHome);
   const repeated = envelope(
     await runFriction({
       arguments: ["setup", "codex", "--apply", "--json"],
@@ -84,12 +89,14 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
     }),
   );
   assert.equal(repeated.data["state"], "noop");
-  assert.deepEqual(await treeBytes(userHome), installedTree);
+  assert.deepEqual(await treeBytes(userHome), installedUserTree);
+  assert.deepEqual(await treeBytes(codexHome), installedCodexTree);
 
   const overrideFile = path.join(codexHome, "AGENTS.override.md");
   const overrideBytes = Buffer.from("# A later user override\n", "utf8");
   await writeFile(overrideFile, overrideBytes);
-  const precedenceTree = await treeBytes(userHome);
+  const precedenceUserTree = await treeBytes(userHome);
+  const precedenceCodexTree = await treeBytes(codexHome);
 
   const undoPreview = envelope(
     await runFriction({
@@ -100,7 +107,8 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
     }),
   );
   assert.equal(undoPreview.data["action"], "preview-undo");
-  assert.deepEqual(await treeBytes(userHome), precedenceTree);
+  assert.deepEqual(await treeBytes(userHome), precedenceUserTree);
+  assert.deepEqual(await treeBytes(codexHome), precedenceCodexTree);
 
   const undone = await runFriction({
     arguments: ["setup", "codex", "--undo", "--apply", "--json"],
@@ -124,6 +132,15 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
       }),
     ).data["snippet"] !== null,
     true,
+  );
+
+  assert.equal(
+    ownedFileState("known-prior", "current", ["known-prior", "current"], false),
+    "update",
+  );
+  assert.equal(
+    ownedFileState("known-prior", "current", ["known-prior", "current"], true),
+    "remove",
   );
 
   const claudeApply = await runFriction({
@@ -169,6 +186,27 @@ test("setup rechecks preimages before mutating repository targets", async () => 
       await readFile(path.join(context.work, "AGENTS.md"), "utf8"),
       "changed after planning\n",
     );
+    await assert.rejects(stat(path.join(context.work, ".agents")));
+
+    const precedencePlan = await buildSetupPlan({
+      harness: "codex",
+      scope: "repo",
+      undo: false,
+      cwd: context.work,
+    });
+    const overridePath = path.join(context.work, "AGENTS.override.md");
+    const overrideBytes = "created after planning\n";
+    const agentsBytes = await readFile(path.join(context.work, "AGENTS.md"));
+    await writeFile(overridePath, overrideBytes);
+    await assert.rejects(
+      applySetupPlan(precedencePlan),
+      (error) => error instanceof FrictionFailure && error.code === "setup_conflict",
+    );
+    assert.equal(
+      (await readFile(path.join(context.work, "AGENTS.md"))).equals(agentsBytes),
+      true,
+    );
+    assert.equal(await readFile(overridePath, "utf8"), overrideBytes);
     await assert.rejects(stat(path.join(context.work, ".agents")));
 
     const outside = path.join(context.root, "outside");

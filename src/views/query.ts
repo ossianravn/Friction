@@ -42,16 +42,18 @@ export async function queryRecords(
   const loaded = await loadEvents(resolveFrictionPaths());
   const folded = foldEvents(loaded.events.map((entry) => entry.event));
   const repository = await discoverRepository(dependencies.cwd ?? process.cwd());
-  const selectedScope = filters.repo ?? (repository.context === null ? "all" : "current");
+  const selectedScope = filters.repo ??
+    (repository.state === "not-repository" ? "all" : "current");
+  const currentContext = repository.state === "repository" ? repository.context : null;
 
-  if (selectedScope === "current" && repository.context === null) {
+  if (selectedScope === "current" && currentContext === null) {
     throw new FrictionFailure("not_found");
   }
 
   let records = folded.records;
 
   if (selectedScope === "current") {
-    const key = repository.context?.key;
+    const key = currentContext!.key;
     records = records.filter(
       (record) => record.observation.repository?.key === key,
     );
@@ -71,12 +73,12 @@ export async function queryRecords(
     scope:
       selectedScope === "all"
         ? { repo: "all" }
-        : { repo: "current", name: repository.context!.name },
+        : { repo: "current", name: currentContext!.name },
     records,
     warnings: {
       eventFindingCount: loaded.findings.length,
       corpusFindingCount: folded.findings.length,
-      repositoryWarning: repository.warning,
+      repositoryWarning: repository.state === "repository-unavailable",
     },
   };
 }

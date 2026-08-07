@@ -1,88 +1,95 @@
-import { areas, impacts, sources } from "../domain/events.js";
-import { BODY_MAX_BYTES, MODEL_MAX_BYTES } from "../capture/input.js";
+import { areas, eventTypes, impacts, sources } from "../domain/events.js";
+import {
+  BODY_MAX_BYTES,
+  BRANCH_MAX_BYTES,
+  CWD_RELATIVE_MAX_BYTES,
+  LIFECYCLE_NOTE_MAX_BYTES,
+  LIFECYCLE_VERIFICATION_MAX_BYTES,
+  MODEL_MAX_BYTES,
+  REPOSITORY_IDENTITY_MAX_BYTES,
+  REPOSITORY_NAME_MAX_BYTES,
+} from "../domain/limits.js";
 import { CLI_VERSION } from "../version.js";
+import { commandContract, commandNames } from "./contract.js";
 import { errorDictionary } from "./errors.js";
+import { exitCodes } from "./exit-codes.js";
+
+const eventBaseFields = [
+  "schemaVersion",
+  "eventType",
+  "eventId",
+  "observationId",
+  "createdAt",
+] as const;
+
+function eventFields(specific: readonly string[]): string[] {
+  return [...eventBaseFields, ...specific, "redaction", "clientVersion"];
+}
 
 export function currentSchema(): object {
   return {
     contractVersion: 1,
     cliVersion: CLI_VERSION,
-    commands: {
-      add: {
-        mutation: "appending",
-        syntax: ["friction add TEXT", "friction add --stdin"],
-        flags: ["--stdin", "--source", "--model", "--area", "--impact", "--json"],
-      },
-      list: {
-        mutation: "read-only",
-        syntax: ["friction list"],
-        flags: ["--repo", "--since", "--limit", "--status", "--json"],
-      },
-      stats: {
-        mutation: "read-only",
-        syntax: ["friction stats"],
-        flags: ["--repo", "--since", "--status", "--json"],
-      },
-      resolve: {
-        mutation: "appending",
-        syntax: ["friction resolve ID"],
-        flags: ["--note", "--verification", "--source", "--json"],
-      },
-      reopen: {
-        mutation: "appending",
-        syntax: ["friction reopen ID"],
-        flags: ["--note", "--source", "--json"],
-      },
-      export: {
-        mutation: "read-only-or-file-writing",
-        syntax: ["friction export"],
-        flags: ["--repo", "--since", "--status", "--format", "--output", "--force", "--json"],
-      },
-      publish: {
-        mutation: "preview-or-repository-writing",
-        syntax: ["friction publish ID [ID ...]", "friction publish --all-open"],
-        flags: ["--all-open", "--output", "--apply", "--json"],
-      },
-      purge: {
-        mutation: "destructive-with-apply",
-        syntax: ["friction purge ID"],
-        flags: ["--apply", "--json"],
-      },
-      doctor: {
-        mutation: "read-mostly",
-        syntax: ["friction doctor"],
-        flags: ["--json"],
-      },
-      setup: {
-        mutation: "preview-or-configuration-writing",
-        syntax: ["friction setup codex|claude-code|generic"],
-        flags: ["--scope", "--apply", "--undo", "--json"],
-      },
-      schema: {
-        mutation: "read-only",
-        syntax: ["friction schema"],
-        flags: ["--json"],
-      },
-    },
+    commands: Object.fromEntries(
+      commandNames.map((name) => [
+        name,
+        {
+          purpose: commandContract[name].purpose,
+          syntax: commandContract[name].syntax,
+          flags: [
+            ...commandContract[name].options.map((option) => option.name.split(" ")[0]),
+            "--json",
+          ],
+          notes: commandContract[name].notes,
+          effects: commandContract[name].effects,
+        },
+      ]),
+    ),
     commonFlags: ["--help", "--version", "--json"],
     enums: { sources, areas, impacts },
     byteLimits: {
       body: BODY_MAX_BYTES,
       model: MODEL_MAX_BYTES,
-      lifecycleNote: 2_048,
-      lifecycleVerification: 512,
-      repositoryName: 255,
-      branch: 512,
-      cwdRelative: 2_048,
-      remotePreimage: 4_096,
+      lifecycleNote: LIFECYCLE_NOTE_MAX_BYTES,
+      lifecycleVerification: LIFECYCLE_VERIFICATION_MAX_BYTES,
+      repositoryName: REPOSITORY_NAME_MAX_BYTES,
+      branch: BRANCH_MAX_BYTES,
+      cwdRelative: CWD_RELATIVE_MAX_BYTES,
+      remotePreimage: REPOSITORY_IDENTITY_MAX_BYTES,
     },
-    event: {
+    events: {
       schemaVersion: 1,
-      eventTypes: ["observation", "resolved", "reopened"],
-      observationFields: [
-        "schemaVersion",
-        "eventType",
-        "eventId",
+      eventTypes,
+      observation: {
+        fields: eventFields([
+          "body",
+          "source",
+          "model",
+          "area",
+          "impacts",
+          "repository",
+        ]),
+      },
+      resolved: {
+        fields: eventFields(["actor", "note", "verification"]),
+      },
+      reopened: {
+        fields: eventFields(["actor", "note"]),
+      },
+    },
+    materializedRecord: {
+      visibility: "private-internal",
+      fields: [
+        "observation",
+        "status",
+        "resolution",
+        "lastLifecycleEvent",
+      ],
+      statuses: ["open", "resolved"],
+    },
+    publicObservationRecord: {
+      visibility: "list-and-export",
+      fields: [
         "observationId",
         "createdAt",
         "body",
@@ -91,30 +98,11 @@ export function currentSchema(): object {
         "area",
         "impacts",
         "repository",
-        "redaction",
-        "clientVersion",
-      ],
-      lifecycleFields: [
-        "schemaVersion",
-        "eventType",
-        "eventId",
-        "observationId",
-        "createdAt",
-        "actor",
-        "note",
-        "verification",
-        "redaction",
-        "clientVersion",
-      ],
-    },
-    materializedRecord: {
-      fields: [
-        "observation",
         "status",
         "resolution",
-        "lastLifecycleEvent",
+        "redactionCount",
       ],
-      statuses: ["open", "resolved"],
+      omittedPrivateFields: ["repository.key", "repository.head", "lastLifecycleEvent"],
     },
     publishedObservation: {
       schemaVersion: 1,
@@ -134,17 +122,10 @@ export function currentSchema(): object {
         "redactionCount",
       ],
       canonicalStore: false,
+      note: "This is a sanitized repository projection, not the canonical store.",
     },
     errors: errorDictionary(),
-    exitCodes: {
-      success: 0,
-      internalOrIo: 1,
-      usageOrValidation: 2,
-      notFound: 3,
-      preconditionConflict: 4,
-      temporaryContention: 5,
-      safety: 6,
-    },
-    environment: ["FRICTION_HOME", "XDG_DATA_HOME", "HOME"],
+    exitCodes,
+    environment: ["FRICTION_HOME", "XDG_DATA_HOME", "HOME", "CODEX_HOME", "PATH"],
   };
 }

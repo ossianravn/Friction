@@ -5,10 +5,9 @@ import { FrictionFailure } from "../domain/failures.js";
 import {
   loadEvents,
   type LoadedEvent,
-  type LoadEventsResult,
 } from "../storage/load-events.js";
 import { resolveFrictionPaths } from "../storage/paths.js";
-import { foldEvents, type FoldResult } from "./fold.js";
+import { foldEvents } from "./fold.js";
 
 export type PurgeReceipt = {
   observationId: string;
@@ -21,22 +20,6 @@ function matchingEvents(
   observationId: string,
 ): LoadedEvent[] {
   return events.filter((entry) => entry.event.observationId === observationId);
-}
-
-function hasMatchingFinding(
-  loaded: LoadEventsResult,
-  folded: FoldResult,
-  observationId: string,
-  matches: readonly LoadedEvent[],
-): boolean {
-  const matchingFiles = new Set(matches.map((entry) => entry.fileName));
-  return (
-    loaded.findings.some(
-      (finding) =>
-        finding.observationId === observationId || matchingFiles.has(finding.fileName),
-    ) ||
-    folded.findings.some((finding) => finding.observationId === observationId)
-  );
 }
 
 async function assertUnchanged(
@@ -78,7 +61,7 @@ export async function purgeObservation(
   const folded = foldEvents(loaded.events.map((entry) => entry.event));
   const matches = matchingEvents(loaded.events, observationId);
 
-  if (hasMatchingFinding(loaded, folded, observationId, matches)) {
+  if (loaded.findings.length > 0 || folded.findings.length > 0) {
     throw new FrictionFailure("corrupt_store");
   }
 
@@ -96,7 +79,13 @@ export async function purgeObservation(
     const currentMatches = matchingEvents(current.events, observationId);
 
     if (
-      hasMatchingFinding(current, currentFolded, observationId, currentMatches) ||
+      current.findings.length > 0 ||
+      currentFolded.findings.length > 0
+    ) {
+      throw new FrictionFailure("corrupt_store");
+    }
+
+    if (
       currentMatches.length !== matches.length ||
       currentMatches.some((entry, index) => {
         const expected = matches[index];

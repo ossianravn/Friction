@@ -2,6 +2,7 @@ import {
   failureCodes,
   type FailureCode,
 } from "../domain/failures.js";
+import { exitCodes } from "./exit-codes.js";
 
 export type ErrorDefinition = {
   message: string;
@@ -12,52 +13,52 @@ export type ErrorDefinition = {
 export const errorRegistry: Record<FailureCode, ErrorDefinition> = {
   internal_error: {
     message: "An internal error occurred.",
-    exitCode: 1,
+    exitCode: exitCodes.internalOrIo,
     retryable: false,
   },
   io_error: {
-    message: "The private event could not be stored.",
-    exitCode: 1,
-    retryable: true,
+    message: "An I/O operation failed.",
+    exitCode: exitCodes.internalOrIo,
+    retryable: false,
   },
   invalid_input: {
     message: "Invalid input.",
-    exitCode: 2,
+    exitCode: exitCodes.usageOrValidation,
     retryable: false,
   },
   not_found: {
     message: "The requested observation or repository was not found.",
-    exitCode: 3,
+    exitCode: exitCodes.notFound,
     retryable: false,
   },
   setup_conflict: {
     message: "Setup target changed before apply.",
-    exitCode: 4,
+    exitCode: exitCodes.preconditionConflict,
     retryable: false,
   },
   output_conflict: {
     message: "Output target cannot be replaced safely.",
-    exitCode: 4,
+    exitCode: exitCodes.preconditionConflict,
     retryable: false,
   },
   publish_conflict: {
     message: "Publish target changed before apply.",
-    exitCode: 4,
+    exitCode: exitCodes.preconditionConflict,
     retryable: false,
   },
   safety_failure: {
     message: "Safety screening failed; nothing was stored.",
-    exitCode: 6,
+    exitCode: exitCodes.safety,
     retryable: false,
   },
   unsupported_platform: {
     message: "This platform is not supported.",
-    exitCode: 6,
+    exitCode: exitCodes.safety,
     retryable: false,
   },
   corrupt_store: {
     message: "The private event store is not healthy.",
-    exitCode: 1,
+    exitCode: exitCodes.internalOrIo,
     retryable: false,
   },
 };

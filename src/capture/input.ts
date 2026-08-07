@@ -9,9 +9,7 @@ import {
   type Source,
 } from "../domain/events.js";
 import { FrictionFailure } from "../domain/failures.js";
-
-export const BODY_MAX_BYTES = 4_096;
-export const MODEL_MAX_BYTES = 128;
+import { BODY_MAX_BYTES, MODEL_MAX_BYTES } from "../domain/limits.js";
 
 export type RawCaptureInput = {
   body: string;

@@ -79,7 +79,7 @@ export async function buildPublishPlan(
   const root = await requireWorktreeRoot(cwd);
   const repository = await discoverRepository(cwd);
 
-  if (repository.context === null) {
+  if (repository.state !== "repository") {
     throw new FrictionFailure("not_found");
   }
 
@@ -91,7 +91,7 @@ export async function buildPublishPlan(
   }
 
   const matching = folded.records.filter(
-    (record) => record.observation.repository?.key === repository.context!.key,
+    (record) => record.observation.repository?.key === repository.context.key,
   );
   const byId = new Map(matching.map((record) => [record.observation.observationId, record]));
   const selectedRecords = input.allOpen
