@@ -8,9 +8,11 @@ review actionable, and remediation honest.
 
 ## Initial dogfood period
 
-Run for ten working days across:
+Continue until the user decides that the collected evidence is sufficient to evaluate
+the PoC. Calendar time and session count are not completion gates; the stopping point
+depends on actual usage and the quality of the observations. Collect evidence across:
 
-- 25 to 40 substantive coding-agent sessions;
+- substantive coding-agent sessions during normal work;
 - two or three real repositories with different shapes;
 - Codex as the primary harness;
 - Claude Code in enough sessions to compare capture behavior;

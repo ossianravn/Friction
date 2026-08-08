@@ -91,9 +91,16 @@ If you already have this repository, start with `npm ci`.
 The global install matters because your coding agent needs a stable `friction` command on
 `PATH`. Friction setup never installs the command for you.
 
+Install Friction in the same environment where your coding agent runs. Native Windows
+and WSL are separate environments: each has its own command installation, setup, and
+private Friction store. If you use both, install and configure both separately.
+
 ### 2. Connect Friction to your coding agent
 
-Setup has two steps: preview the exact plan, then apply it. The preview makes no changes.
+You do not need to find or edit an `AGENTS.md` file yourself. Friction setup finds the
+applicable instruction file, adds only its own managed block, and installs the review and
+fix skills. Setup has two steps: preview the exact plan, then apply it. The preview shows
+the files involved and makes no changes.
 
 For Codex:
 
@@ -112,9 +119,13 @@ friction setup claude-code --apply
 Run both pairs if you use both coding agents. Start a new coding-agent session after
 setup so it reloads its instructions and skills.
 
-By default, setup applies to your user account, so Friction is available across your
-repositories. To enable it for only the repository you are currently in, add
-`--scope repo` to both the preview and apply commands:
+The default user-level setup is the right choice when you work across several
+repositories. For Codex, it uses the active `AGENTS.override.md` or `AGENTS.md` under
+`CODEX_HOME` and installs the skills under your user home. Existing instructions remain
+unchanged outside Friction's managed block.
+
+Use repository-level setup only when you want Friction enabled in one particular
+repository. From that repository, add `--scope repo` to both commands:
 
 ```sh
 friction setup codex --scope repo
@@ -136,8 +147,12 @@ directories, ACLs, locks, or private store.
 
 ### 3. Work normally
 
-You do not need to start or monitor Friction. Continue giving Codex or Claude Code normal
-coding tasks.
+You do not run Friction before starting Codex or Claude Code. There is no Friction
+server, background process, or monitor. The setup persists, so after the one-time setup
+you start your coding agent normally and give it normal coding tasks.
+
+When the agent records an observation, it starts the `friction` command for that one
+note. The command stores the note privately and exits immediately.
 
 When the agent notices a concrete, avoidable obstacle, its Friction instruction tells it
 to finish the immediate step, record a concise observation, and continue. Examples
@@ -155,8 +170,9 @@ preferences, full transcripts, secrets, or large command output.
 
 ### 4. Ask for a review
 
-After Friction has collected observations, ask your coding agent to use the installed
-review skill. For example:
+You decide when Friction has collected enough useful evidence to evaluate. There is no
+required number of days or sessions. When you are ready, ask your coding agent to use
+the installed review skill. For example:
 
 ```text
 Use friction-review to review the Friction observations for this repository.
