@@ -54,7 +54,8 @@ Do not add any of the following unless a later user request explicitly authorize
 - direct issue submission, automatic commits, automatic publishing, or release setup;
 - SQLite, a database dependency, a CLI framework, a logging framework, or a schema
   framework;
-- native Windows support beyond code that naturally works there;
+- Windows ARM64, private UNC storage, native installers, or other platform claims
+  beyond the baseline authorized by `16-NATIVE-WINDOWS.md`;
 - raw stderr, full command output, diffs, file contents, environment dumps, or
   transcripts as stored evidence;
 - migration machinery for storage formats that have never shipped;
@@ -73,7 +74,8 @@ Do not pause to ask about these:
   projection. It does not mean dual-write or two canonical stores.
 - User scope is the default for setup.
 - Codex and Claude Code are the first adapters; generic shell guidance is included.
-- MacOS and Linux are PoC targets; WSL follows Linux behavior.
+- macOS, Linux, and the native Windows baseline in `16-NATIVE-WINDOWS.md` are PoC
+  targets; WSL follows Linux behavior and is not native-Windows evidence.
 - A capture failure is visible but must not stop the agent’s primary coding task.
 - Observation diagnoses are hypotheses until review verifies them.
 - Repeated observations across sessions are useful signal. Duplicate spam within one

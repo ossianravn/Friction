@@ -56,8 +56,10 @@ test("stdin capture outside Git stores one private event without echoing its bod
   assert.equal(event.value["body"], body);
   assert.equal(event.value["source"], "codex");
   assert.equal(event.value["repository"], null);
-  assert.equal((await stat(fixture.home)).mode & 0o777, 0o700);
-  assert.equal((await stat((await eventFiles(fixture.home))[0]!)).mode & 0o777, 0o600);
+  if (process.platform !== "win32") {
+    assert.equal((await stat(fixture.home)).mode & 0o777, 0o700);
+    assert.equal((await stat((await eventFiles(fixture.home))[0]!)).mode & 0o777, 0o600);
+  }
 
   const invalid = await runFriction({
     arguments: ["add", "--stdin", "--json"],

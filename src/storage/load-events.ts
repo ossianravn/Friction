@@ -1,17 +1,17 @@
-import { constants } from "node:fs";
-import { open, readdir } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 
 import { isFrictionEvent } from "../domain/event-validation.js";
 import type { FrictionEvent } from "../domain/events.js";
 import { FrictionFailure } from "../domain/failures.js";
 import { compareText } from "../domain/sort.js";
+import { readRegularFileSafely } from "../platform/safe-file.js";
 import { screenLoadedEvent } from "../security/screen-event.js";
+import type { FrictionPaths } from "./paths.js";
 import {
-  rejectSymlinkedHome,
-  rejectUnsafeStoreDirectory,
-  type FrictionPaths,
-} from "./paths.js";
+  verifyEventStoreForRead,
+  verifyPrivateStoreFile,
+} from "./private-store.js";
 
 const MAXIMUM_EVENT_BYTES = 32 * 1_024;
 
@@ -25,7 +25,9 @@ export type EventFindingType =
   | "unknown-event-type"
   | "invalid-event"
   | "filename-mismatch"
-  | "unknown-properties";
+  | "unknown-properties"
+  | "unsafe-permissions"
+  | "unsafe-path";
 
 export type EventFinding = {
   fileName: string;
@@ -51,35 +53,6 @@ function isMissing(error: unknown): boolean {
     "code" in error &&
     error.code === "ENOENT"
   );
-}
-
-async function readBoundedFile(filePath: string): Promise<Buffer | null> {
-  const handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW);
-
-  try {
-    const status = await handle.stat();
-
-    if (!status.isFile() || status.size > MAXIMUM_EVENT_BYTES) {
-      return null;
-    }
-
-    const bytes = Buffer.alloc(MAXIMUM_EVENT_BYTES + 1);
-    let offset = 0;
-
-    while (offset < bytes.length) {
-      const result = await handle.read(bytes, offset, bytes.length - offset, null);
-
-      if (result.bytesRead === 0) {
-        break;
-      }
-
-      offset += result.bytesRead;
-    }
-
-    return offset > MAXIMUM_EVENT_BYTES ? null : bytes.subarray(0, offset);
-  } finally {
-    await handle.close();
-  }
 }
 
 function expectedKeys(event: FrictionEvent): readonly string[] {
@@ -172,8 +145,10 @@ function parseEvent(
 }
 
 export async function loadEvents(paths: FrictionPaths): Promise<LoadEventsResult> {
-  await rejectSymlinkedHome(paths.home);
-  await rejectUnsafeStoreDirectory(paths.events);
+  if (!(await verifyEventStoreForRead(paths))) {
+    return { events: [], findings: [] };
+  }
+
   let entries;
 
   try {
@@ -204,15 +179,33 @@ export async function loadEvents(paths: FrictionPaths): Promise<LoadEventsResult
       continue;
     }
 
-    try {
-      const bytes = await readBoundedFile(path.join(paths.events, entry.name));
+    const eventPath = path.join(paths.events, entry.name);
 
-      if (bytes === null) {
+    try {
+      await verifyPrivateStoreFile(eventPath);
+    } catch {
+      findings.push(finding(entry.name, "unsafe-permissions"));
+      continue;
+    }
+
+    try {
+      const read = await readRegularFileSafely(
+        paths.events,
+        eventPath,
+        MAXIMUM_EVENT_BYTES,
+      );
+
+      if (!read.exists) {
+        findings.push(finding(entry.name, "unreadable"));
+        continue;
+      }
+
+      if (read.bytes === null) {
         findings.push(finding(entry.name, "oversized"));
         continue;
       }
 
-      const parsed = parseEvent(bytes, entry.name);
+      const parsed = parseEvent(read.bytes, entry.name);
 
       if (parsed.loaded !== null) {
         events.push(parsed.loaded);
@@ -221,8 +214,15 @@ export async function loadEvents(paths: FrictionPaths): Promise<LoadEventsResult
       if (parsed.finding !== null) {
         findings.push(parsed.finding);
       }
-    } catch {
-      findings.push(finding(entry.name, "unreadable"));
+    } catch (error) {
+      findings.push(
+        finding(
+          entry.name,
+          error instanceof FrictionFailure && error.code === "safety_failure"
+            ? "unsafe-path"
+            : "unreadable",
+        ),
+      );
     }
   }
 

@@ -46,6 +46,44 @@ export function currentSchema(): object {
       ]),
     ),
     commonFlags: ["--help", "--version", "--json"],
+    platforms: {
+      darwin: { supported: true },
+      linux: { supported: true },
+      win32: {
+        supported: true,
+        releaseStatus: "under-validation",
+        privateStore: "%LOCALAPPDATA%\\friction",
+        requiresAclVerification: true,
+        privateUncStore: false,
+      },
+    },
+    windows: {
+      privateAcl: {
+        principals: ["current-user", "LocalSystem"],
+        inheritanceProtected: true,
+        verificationRequiredBeforePersistence: true,
+      },
+      pathRestrictions: {
+        fullyQualifiedLocal: true,
+        driveRelative: false,
+        deviceNamespace: false,
+        alternateDataStreams: false,
+        reservedNames: false,
+        trailingDotOrSpace: false,
+        reparsePoints: false,
+      },
+      requiredFilesystemCapabilities: [
+        "exclusive-create",
+        "hard-link-install",
+        "replace-existing",
+        "lock-file",
+      ],
+    },
+    setupAdapters: {
+      codex: { darwin: "posix", linux: "posix", win32: "powershell" },
+      claudeCode: { darwin: "posix", linux: "posix", win32: "git-bash" },
+      generic: { darwin: ["posix"], linux: ["posix"], win32: ["powershell", "git-bash"] },
+    },
     enums: { sources, areas, impacts },
     byteLimits: {
       body: BODY_MAX_BYTES,
@@ -126,6 +164,17 @@ export function currentSchema(): object {
     },
     errors: errorDictionary(),
     exitCodes,
-    environment: ["FRICTION_HOME", "XDG_DATA_HOME", "HOME", "CODEX_HOME", "PATH"],
+    environment: [
+      "FRICTION_HOME",
+      "XDG_DATA_HOME",
+      "HOME",
+      "USERPROFILE",
+      "LOCALAPPDATA",
+      "CODEX_HOME",
+      "PATH",
+      "PATHEXT",
+      "SystemRoot",
+      "ComSpec",
+    ],
   };
 }

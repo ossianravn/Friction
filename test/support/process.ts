@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import { buildChildEnvironment } from "../../src/platform/environment.js";
+
 const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
 const binPath = path.join(repositoryRoot, "src", "bin", "friction.ts");
 const tsxImport = import.meta.resolve("tsx");
@@ -29,6 +31,7 @@ export async function runProcess(
       cwd: options.cwd,
       env: options.environment ?? process.env,
       stdio: [hasInput ? "pipe" : "ignore", "pipe", "pipe"],
+      windowsHide: process.platform === "win32",
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
@@ -80,12 +83,11 @@ export async function runFriction(options: {
     ["--import", tsxImport, binPath, ...options.arguments],
     {
       cwd: options.cwd,
-      environment: {
-        ...process.env,
+      environment: buildChildEnvironment({
         HOME: path.dirname(options.home),
         ...options.environment,
         FRICTION_HOME: options.home,
-      },
+      }),
       stdin: options.stdin,
     },
   );

@@ -9,13 +9,36 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    name: Node 24 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-2025]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
+      - name: Isolate native Windows homes
+        if: matrix.os == 'windows-2025'
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "friction-native-ci"
+          $user = Join-Path $root "user"
+          $codex = Join-Path $root "codex"
+          $local = Join-Path $root "local-app-data"
+          $npmPrefix = Join-Path $root "npm-prefix"
+          New-Item -ItemType Directory -Force $root, $user, $codex, $local, $npmPrefix | Out-Null
+          "HOME=$user" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "USERPROFILE=$user" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "LOCALAPPDATA=$local" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "FRICTION_HOME=$(Join-Path $root 'private')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CODEX_HOME=$codex" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "NPM_CONFIG_PREFIX=$npmPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $npmPrefix | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - run: npm ci
       - run: npm run check
       - run: npm run pack:smoke

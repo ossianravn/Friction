@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
-import { constants } from "node:fs";
-import { lstat, open } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import path from "node:path";
 
 import { FrictionFailure } from "../domain/failures.js";
+import { resolveRuntimePlatform } from "../platform/runtime-platform.js";
+import { readRegularFileSafely } from "../platform/safe-file.js";
+import { assertPathInsideRoot } from "../platform/safe-path.js";
+import { inspectWindowsPathComponents } from "../platform/windows/reparse.js";
 import { isPublishedObservation } from "./projection.js";
 import type { PublishedObservation, PublishSnapshot } from "./types.js";
 
@@ -14,9 +17,9 @@ function isMissing(error: unknown): boolean {
 }
 
 export function assertPublishPath(root: string, targetPath: string): void {
-  const relative = path.relative(root, targetPath);
-
-  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+  try {
+    assertPathInsideRoot(root, targetPath);
+  } catch {
     throw new FrictionFailure("publish_conflict");
   }
 }
@@ -26,6 +29,16 @@ export async function rejectSymlinkedPublishParents(
   targetPath: string,
 ): Promise<void> {
   assertPublishPath(root, targetPath);
+
+  if (resolveRuntimePlatform() === "win32") {
+    try {
+      await inspectWindowsPathComponents(root, targetPath, "file-or-missing");
+      return;
+    } catch {
+      throw new FrictionFailure("publish_conflict");
+    }
+  }
+
   const relative = path.relative(root, path.dirname(targetPath));
   const components = relative === "" ? [] : relative.split(path.sep);
   let current = root;
@@ -106,27 +119,28 @@ export async function inspectPublishTarget(
   await rejectSymlinkedPublishParents(root, targetPath);
 
   try {
-    const handle = await open(targetPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const read = await readRegularFileSafely(
+      root,
+      targetPath,
+      MAXIMUM_PROJECTION_BYTES,
+    );
 
-    try {
-      const status = await handle.stat();
-
-      if (!status.isFile() || status.size > MAXIMUM_PROJECTION_BYTES) {
-        throw new FrictionFailure("publish_conflict");
-      }
-
-      const bytes = await handle.readFile();
-      const records = parseProjection(bytes);
-      return {
-        exists: true,
-        digest: createHash("sha256").update(bytes).digest("hex"),
-        mode: status.mode & 0o777,
-        bytes,
-        records,
-      };
-    } finally {
-      await handle.close();
+    if (!read.exists) {
+      return { exists: false, digest: null, mode: null, bytes: Buffer.alloc(0), records: [] };
     }
+
+    if (read.bytes === null) {
+      throw new FrictionFailure("publish_conflict");
+    }
+
+    const records = parseProjection(read.bytes);
+    return {
+      exists: true,
+      digest: createHash("sha256").update(read.bytes).digest("hex"),
+      mode: read.mode,
+      bytes: read.bytes,
+      records,
+    };
   } catch (error) {
     if (isMissing(error)) {
       return { exists: false, digest: null, mode: null, bytes: Buffer.alloc(0), records: [] };

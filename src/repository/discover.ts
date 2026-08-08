@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { realpath } from "node:fs/promises";
+import { lstat, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 
 import type { RepositoryContext } from "../domain/events.js";
 import { FrictionFailure } from "../domain/failures.js";
+import { getEnvironmentValue } from "../platform/environment.js";
 import {
   BRANCH_MAX_BYTES,
   CWD_RELATIVE_MAX_BYTES,
@@ -41,6 +42,58 @@ function screen(value: string): ReturnType<typeof redact> {
     return redact(value);
   } catch {
     throw new FrictionFailure("safety_failure");
+  }
+}
+
+function isMissing(error: unknown): boolean {
+  return error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error.code === "ENOENT" || error.code === "ENOTDIR");
+}
+
+async function repositoryMarkerPresent(cwd: string): Promise<boolean> {
+  if (
+    getEnvironmentValue("GIT_DIR") ||
+    getEnvironmentValue("GIT_WORK_TREE")
+  ) {
+    return true;
+  }
+
+  let directory: string;
+  try {
+    directory = await realpath(cwd);
+  } catch {
+    return true;
+  }
+
+  while (true) {
+    try {
+      const marker = path.join(directory, ".git");
+      const status = await lstat(marker);
+
+      if (status.isFile()) {
+        if (status.size > 0) {
+          return true;
+        }
+      } else if (status.isDirectory()) {
+        if ((await readdir(marker)).length > 0) {
+          return true;
+        }
+      } else {
+        return true;
+      }
+    } catch (error) {
+      if (!isMissing(error)) {
+        return true;
+      }
+    }
+
+    const parent = path.dirname(directory);
+    if (parent === directory) {
+      return false;
+    }
+    directory = parent;
   }
 }
 
@@ -99,11 +152,14 @@ async function localIdentity(
 }
 
 export async function discoverRepository(cwd: string): Promise<RepositoryDiscovery> {
-  const topLevelResult = await runGit(["rev-parse", "--show-toplevel"], cwd);
+  const topLevelResult = await runGit(
+    ["rev-parse", "--path-format=absolute", "--show-toplevel"],
+    cwd,
+  );
 
   if (
     topLevelResult.status === "failed" &&
-    topLevelResult.reason === "not-repository"
+    !(await repositoryMarkerPresent(cwd))
   ) {
     return { state: "not-repository", replacementCount: 0 };
   }

@@ -3,14 +3,18 @@ import { lstat, open, readdir, unlink } from "node:fs/promises";
 import path from "node:path";
 
 import { foldEvents } from "../lifecycle/fold.js";
+import { FrictionFailure } from "../domain/failures.js";
 import { discoverRepository } from "../repository/discover.js";
 import { executableOnPath } from "../platform/path.js";
+import { resolveRuntimePlatform } from "../platform/runtime-platform.js";
 import { redact } from "../security/redact.js";
 import { buildSetupPlan } from "../setup/plan.js";
 import type { SetupHarness } from "../setup/types.js";
 import { loadEvents } from "../storage/load-events.js";
 import { resolveFrictionPaths } from "../storage/paths.js";
+import { verifyPrivateStoreFile } from "../storage/private-store.js";
 import { CLI_VERSION } from "../version.js";
+import { windowsPrivateStoreChecks } from "./windows-checks.js";
 
 export type DoctorCheck = {
   name: string;
@@ -57,6 +61,7 @@ async function probeTemporaryDirectory(directory: string): Promise<DoctorCheck> 
 
   try {
     handle = await open(probe, "wx", 0o600);
+    await verifyPrivateStoreFile(probe);
     await handle.close();
     handle = undefined;
     await unlink(probe);
@@ -92,6 +97,7 @@ async function setupCheck(harness: SetupHarness, cwd: string): Promise<DoctorChe
 }
 
 export async function runDoctor(cwd: string = process.cwd()): Promise<DoctorCheck[]> {
+  const platform = resolveRuntimePlatform();
   const paths = resolveFrictionPaths();
   const checks: DoctorCheck[] = [
     {
@@ -102,25 +108,55 @@ export async function runDoctor(cwd: string = process.cwd()): Promise<DoctorChec
     {
       name: "home-path",
       status: "ok",
-      message: `Private home: ${paths.home}`,
+      message: platform === "win32"
+        ? "Private home is a validated local Windows path."
+        : `Private home: ${paths.home}`,
     },
   ];
-  const home = await pathCheck("home", paths.home, 0o700);
-  checks.push(home);
+  if (platform === "win32") {
+    const windows = await windowsPrivateStoreChecks(paths);
+    checks.push(...windows.checks);
 
-  if (home.status === "error") {
-    return checks;
+    if (!windows.safeToRead) {
+      return checks;
+    }
+  } else {
+    const home = await pathCheck("home", paths.home, 0o700);
+    checks.push(home);
+
+    if (home.status === "error") {
+      return checks;
+    }
+
+    const eventsDirectory = await pathCheck("events-directory", paths.events, 0o700);
+    const temporaryDirectory = await pathCheck("temporary-directory", paths.temporary, 0o700);
+    checks.push(eventsDirectory, temporaryDirectory);
+
+    if (eventsDirectory.status === "error" || temporaryDirectory.status === "error") {
+      return checks;
+    }
   }
 
-  const eventsDirectory = await pathCheck("events-directory", paths.events, 0o700);
-  const temporaryDirectory = await pathCheck("temporary-directory", paths.temporary, 0o700);
-  checks.push(eventsDirectory, temporaryDirectory);
+  let loaded;
 
-  if (eventsDirectory.status === "error" || temporaryDirectory.status === "error") {
-    return checks;
+  try {
+    loaded = await loadEvents(paths);
+  } catch (error) {
+    if (
+      platform === "win32" &&
+      error instanceof FrictionFailure &&
+      error.code === "safety_failure"
+    ) {
+      checks.push({
+        name: "event-store",
+        status: "error",
+        message: "Private event store layout is unsafe or unverifiable.",
+      });
+      return checks;
+    }
+
+    throw error;
   }
-
-  const loaded = await loadEvents(paths);
   const folded = foldEvents(loaded.events.map((entry) => entry.event));
 
   for (const finding of loaded.findings) {
@@ -140,15 +176,17 @@ export async function runDoctor(cwd: string = process.cwd()): Promise<DoctorChec
     });
   }
 
-  for (const entry of loaded.events) {
-    const status = await lstat(path.join(paths.events, entry.fileName));
+  if (platform !== "win32") {
+    for (const entry of loaded.events) {
+      const status = await lstat(path.join(paths.events, entry.fileName));
 
-    if ((status.mode & 0o077) !== 0) {
-      checks.push({
-        name: "event-permissions",
-        status: "warn",
-        message: `${redact(entry.fileName).text}: permissions are broader than expected.`,
-      });
+      if ((status.mode & 0o077) !== 0) {
+        checks.push({
+          name: "event-permissions",
+          status: "warn",
+          message: `${redact(entry.fileName).text}: permissions are broader than expected.`,
+        });
+      }
     }
   }
 

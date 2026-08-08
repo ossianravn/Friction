@@ -39,14 +39,18 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
   const agentsFile = path.join(codexHome, "AGENTS.md");
   const environment = {
     HOME: userHome,
+    USERPROFILE: userHome,
+    LOCALAPPDATA: path.join(context.root, "local-app-data"),
     CODEX_HOME: codexHome,
-    PATH: "/usr/bin:/bin",
+    PATH: process.platform === "win32" ? "C:\\Windows\\System32" : "/usr/bin:/bin",
   };
   const original = Buffer.from("# Existing\r\n\r\nKeep this byte-for-byte.", "utf8");
   await mkdir(userHome);
   await mkdir(codexHome);
   await writeFile(agentsFile, original);
-  await chmod(agentsFile, 0o666);
+  if (process.platform !== "win32") {
+    await chmod(agentsFile, 0o666);
+  }
   const beforeUserPreview = await treeBytes(userHome);
   const beforeCodexPreview = await treeBytes(codexHome);
 
@@ -73,10 +77,19 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
   const installed = await readFile(agentsFile);
   assert.equal(installed.includes(Buffer.from("friction add --stdin --source codex")), true);
   assert.equal(installed.subarray(installed.length - original.length).equals(original), true);
-  assert.equal((await stat(agentsFile)).mode & 0o777, 0o666);
+  if (process.platform === "win32") {
+    const installedText = installed.toString("utf8");
+    assert.equal(installedText.includes("$OutputEncoding = $utf8NoBom"), true);
+    assert.equal(installedText.includes("printf '%s"), false);
+    assert.equal(installedText.replaceAll("\r\n", "").includes("\n"), false);
+  } else {
+    assert.equal((await stat(agentsFile)).mode & 0o777, 0o666);
+  }
   const reviewSkill = path.join(userHome, ".agents", "skills", "friction-review", "SKILL.md");
   assert.equal((await readFile(reviewSkill, "utf8")).includes("name: friction-review"), true);
-  assert.equal((await stat(reviewSkill)).mode & 0o777, 0o600);
+  if (process.platform !== "win32") {
+    assert.equal((await stat(reviewSkill)).mode & 0o777, 0o600);
+  }
 
   const installedUserTree = await treeBytes(userHome);
   const installedCodexTree = await treeBytes(codexHome);
@@ -118,21 +131,25 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
   });
   assert.equal(undone.code, 0);
   assert.equal((await readFile(agentsFile)).equals(original), true);
-  assert.equal((await stat(agentsFile)).mode & 0o777, 0o666);
+  if (process.platform !== "win32") {
+    assert.equal((await stat(agentsFile)).mode & 0o777, 0o666);
+  }
   assert.equal((await readFile(overrideFile)).equals(overrideBytes), true);
   await assert.rejects(readFile(reviewSkill));
 
-  assert.equal(
-    envelope(
-      await runFriction({
-        arguments: ["setup", "generic", "--json"],
-        cwd: context.work,
-        home: context.home,
-        environment,
-      }),
-    ).data["snippet"] !== null,
-    true,
-  );
+  const genericSnippet = envelope(
+    await runFriction({
+      arguments: ["setup", "generic", "--json"],
+      cwd: context.work,
+      home: context.home,
+      environment,
+    }),
+  ).data["snippet"] as string;
+  assert.equal(genericSnippet.length > 0, true);
+  if (process.platform === "win32") {
+    assert.equal(genericSnippet.includes("PowerShell:"), true);
+    assert.equal(genericSnippet.includes("Git Bash:"), true);
+  }
 
   assert.equal(
     ownedFileState("known-prior", "current", ["known-prior", "current"], false),
@@ -151,6 +168,12 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
   });
   assert.equal(claudeApply.code, 0);
   const rule = path.join(userHome, ".claude", "rules", "friction.md");
+  const ruleText = await readFile(rule, "utf8");
+  assert.equal(ruleText.includes("friction add --stdin --source claude-code"), true);
+  if (process.platform === "win32") {
+    assert.equal(ruleText.includes("printf '%s\\n'"), true);
+    assert.equal(ruleText.includes("$OutputEncoding"), false);
+  }
   await writeFile(rule, "user changed this managed file\n");
   const beforeConflict = await treeBytes(userHome);
   const conflict = await runFriction({
@@ -211,7 +234,11 @@ test("setup rechecks preimages before mutating repository targets", async () => 
 
     const outside = path.join(context.root, "outside");
     await mkdir(outside);
-    await symlink(outside, path.join(context.work, ".agents"));
+    await symlink(
+      outside,
+      path.join(context.work, ".agents"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
     await assert.rejects(
       buildSetupPlan({
         harness: "codex",

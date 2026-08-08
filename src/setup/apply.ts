@@ -1,13 +1,19 @@
-import { createHash, randomUUID } from "node:crypto";
-import { link, mkdir, open, rename, unlink } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { open, unlink } from "node:fs/promises";
 import path from "node:path";
 
 import { FrictionFailure } from "../domain/failures.js";
-import { redact } from "../security/redact.js";
 import {
-  rejectUnsafeStoreDirectory,
-  resolveFrictionPaths,
-} from "../storage/paths.js";
+  commitStagedFile,
+  discardStagedFile,
+  stageFileReplacement,
+} from "../platform/atomic-file.js";
+import { redact } from "../security/redact.js";
+import { resolveFrictionPaths } from "../storage/paths.js";
+import {
+  ensureSetupLockStore,
+  verifyPrivateStoreFile,
+} from "../storage/private-store.js";
 import {
   compareSetupPaths,
   createSetupDirectories,
@@ -35,17 +41,8 @@ async function acquireLock(plan: SetupPlan): Promise<{
   release(): Promise<void>;
 }> {
   const paths = resolveFrictionPaths();
-  const versionRoot = path.join(paths.home, "v1");
-  const lockRoot = path.join(versionRoot, "setup-locks");
-  await rejectUnsafeStoreDirectory(paths.home);
-  await mkdir(paths.home, { recursive: true, mode: 0o700 });
-  await rejectUnsafeStoreDirectory(paths.home);
-  await rejectUnsafeStoreDirectory(versionRoot);
-  await mkdir(versionRoot, { recursive: true, mode: 0o700 });
-  await rejectUnsafeStoreDirectory(versionRoot);
-  await rejectUnsafeStoreDirectory(lockRoot);
-  await mkdir(lockRoot, { recursive: true, mode: 0o700 });
-  await rejectUnsafeStoreDirectory(lockRoot);
+  const lockRoot = paths.setupLocks;
+  await ensureSetupLockStore(paths);
   const lockIdentity = JSON.stringify({
     harness: plan.harness,
     scope: plan.scope,
@@ -57,6 +54,15 @@ async function acquireLock(plan: SetupPlan): Promise<{
   for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
       const handle = await open(lockPath, "wx", 0o600);
+
+      try {
+        await verifyPrivateStoreFile(lockPath);
+      } catch (error) {
+        await handle.close().catch(() => undefined);
+        await unlink(lockPath).catch(() => undefined);
+        throw error;
+      }
+
       return {
         release: async () => {
           await handle.close().catch(() => undefined);
@@ -64,6 +70,10 @@ async function acquireLock(plan: SetupPlan): Promise<{
         },
       };
     } catch (error) {
+      if (error instanceof FrictionFailure) {
+        throw error;
+      }
+
       if (!isCode(error, "EEXIST")) {
         throw new FrictionFailure("io_error");
       }
@@ -99,7 +109,6 @@ async function stageTarget(
     return { target, temporaryPath: null };
   }
 
-  const parent = path.dirname(target.path);
   await assertSetupRoot(target.scopeRoot);
   const current = await inspectSetupFile(target.scopeRoot, target.path);
 
@@ -107,20 +116,12 @@ async function stageTarget(
     throw new FrictionFailure("setup_conflict");
   }
 
-  const temporaryPath = path.join(parent, `.friction-${randomUUID().replaceAll("-", "")}.tmp`);
   const mode = target.snapshot.mode ?? (plan.scope === "user" ? 0o600 : 0o644);
-  const handle = await open(temporaryPath, "wx", mode);
-
-  try {
-    await handle.chmod(mode);
-    await handle.writeFile(target.desiredBytes);
-    await handle.sync();
-  } catch (error) {
-    await unlink(temporaryPath).catch(() => undefined);
-    throw error;
-  } finally {
-    await handle.close();
-  }
+  const temporaryPath = await stageFileReplacement(
+    target.path,
+    target.desiredBytes,
+    mode,
+  );
 
   return { target, temporaryPath };
 }
@@ -148,19 +149,20 @@ async function commitTarget(plan: SetupPlan, staged: StagedTarget): Promise<void
     throw new FrictionFailure("internal_error");
   }
 
-  if (!target.snapshot.exists) {
-    try {
-      await link(temporaryPath, target.path);
-    } catch (error) {
-      if (isCode(error, "EEXIST")) {
+  await commitStagedFile({
+    temporaryPath,
+    targetPath: target.path,
+    targetExists: target.snapshot.exists,
+    conflictCode: "setup_conflict",
+    assertUnchanged: async () => {
+      await assertSetupRoot(target.scopeRoot);
+      const latest = await inspectSetupFile(target.scopeRoot, target.path);
+
+      if (!sameSnapshot(latest, target.snapshot)) {
         throw new FrictionFailure("setup_conflict");
       }
-
-      throw error;
-    }
-  } else {
-    await rename(temporaryPath, target.path);
-  }
+    },
+  });
 }
 
 export async function applySetupPlan(plan: SetupPlan): Promise<void> {
@@ -184,9 +186,11 @@ export async function applySetupPlan(plan: SetupPlan): Promise<void> {
       createdDirectories,
     );
 
-    const orderedTargets = [...plan.targets].sort((left, right) =>
-      compareSetupPaths(left.path, right.path),
-    );
+    const orderedTargets = [...plan.targets].sort((left, right) => {
+      const leftOrder = left.kind === "managed-block" ? 0 : 1;
+      const rightOrder = right.kind === "managed-block" ? 0 : 1;
+      return leftOrder - rightOrder || compareSetupPaths(left.path, right.path);
+    });
 
     for (const target of orderedTargets) {
       staged.push(await stageTarget(plan, target));
@@ -196,7 +200,6 @@ export async function applySetupPlan(plan: SetupPlan): Promise<void> {
 
     for (const target of staged) {
       if (
-        target.target.kind === "managed-block" &&
         target.target.state !== "noop" &&
         !instructionPreconditionsChecked
       ) {
@@ -219,7 +222,7 @@ export async function applySetupPlan(plan: SetupPlan): Promise<void> {
   } finally {
     for (const target of staged) {
       if (target.temporaryPath !== null) {
-        await unlink(target.temporaryPath).catch(() => undefined);
+        await discardStagedFile(target.temporaryPath);
       }
     }
 

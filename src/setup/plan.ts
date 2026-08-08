@@ -2,11 +2,14 @@ import { homedir } from "node:os";
 import path from "node:path";
 
 import { FrictionFailure } from "../domain/failures.js";
+import { getEnvironmentValue } from "../platform/environment.js";
+import { resolveRuntimePlatform } from "../platform/runtime-platform.js";
+import { assertSafeWindowsPathInput } from "../platform/windows/path-policy.js";
 import { requireWorktreeRoot } from "../repository/worktree.js";
 import {
   captureInstruction,
+  genericCaptureSnippet,
   loadSetupAssets,
-  packagedSkillPaths,
 } from "./assets.js";
 import { canonicalizeSetupRoot, inspectSetupFile } from "./files.js";
 import { activeCodexInstructionPath } from "./preconditions.js";
@@ -92,6 +95,9 @@ export async function buildSetupPlan(input: {
   undo: boolean;
   cwd: string;
 }): Promise<SetupPlan> {
+  const assets = await loadSetupAssets();
+  const windows = resolveRuntimePlatform() === "win32";
+
   if (input.harness === "generic") {
     if (input.undo) {
       throw new FrictionFailure("invalid_input");
@@ -104,20 +110,21 @@ export async function buildSetupPlan(input: {
       undo: false,
       targets: [],
       preconditions: [],
-      snippet: `printf '%s\\n' "<what you were doing -> obstacle/effect -> likely prevention>" | friction add --stdin --source generic\nSkills: ${packagedSkillPaths().join(", ")}`,
+      snippet: genericCaptureSnippet(assets, windows),
     };
   }
 
   const userHome = await canonicalizeSetupRoot(homedir());
   const scopeRoot = input.scope === "user" ? userHome : await requireWorktreeRoot(input.cwd);
-  const assets = await loadSetupAssets();
   const targets: SetupTarget[] = [];
   const preconditions: SetupPrecondition[] = [];
 
   if (input.harness === "codex") {
+    const configuredCodexHome = getEnvironmentValue("CODEX_HOME");
+    const selectedCodexHome = configuredCodexHome || path.join(userHome, ".codex");
     const requestedInstructionRoot =
       input.scope === "user"
-        ? path.resolve(process.env["CODEX_HOME"] || path.join(userHome, ".codex"))
+        ? path.resolve(windows ? assertSafeWindowsPathInput(selectedCodexHome) : selectedCodexHome)
         : scopeRoot;
     const instructionRoot = input.scope === "user"
       ? await canonicalizeSetupRoot(requestedInstructionRoot)
@@ -127,7 +134,7 @@ export async function buildSetupPlan(input: {
       preconditions,
       instructionRoot,
       input.undo,
-      captureInstruction(assets.captureTemplate, "codex"),
+      captureInstruction(assets, "codex", windows ? "powershell" : "posix"),
     );
     const skillsRoot =
       input.scope === "user"
@@ -142,7 +149,7 @@ export async function buildSetupPlan(input: {
         "claude-rule",
         scopeRoot,
         path.join(claudeRoot, "rules", "friction.md"),
-        captureInstruction(assets.captureTemplate, "claude-code"),
+        captureInstruction(assets, "claude-code", "posix"),
         input.undo,
       ),
     );

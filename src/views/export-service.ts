@@ -3,6 +3,8 @@ import path from "node:path";
 import type { RawReadFilters } from "../domain/filters.js";
 import { FrictionFailure } from "../domain/failures.js";
 import { writeOutputFile } from "../platform/fs.js";
+import { resolveRuntimePlatform } from "../platform/runtime-platform.js";
+import { assertSafeWindowsPathInput } from "../platform/windows/path-policy.js";
 import { renderExport, type ExportFormat } from "./export.js";
 import { toPublicRecord } from "./public-record.js";
 import { queryRecords, type QueryWarnings, type ScopeDisplay } from "./query.js";
@@ -41,7 +43,10 @@ export async function exportObservations(input: ExportInput): Promise<ExportResu
   let outputPath: string | null = null;
 
   if (input.output !== undefined) {
-    outputPath = path.resolve(input.output);
+    const selectedOutput = resolveRuntimePlatform() === "win32"
+      ? assertSafeWindowsPathInput(input.output)
+      : input.output;
+    outputPath = path.resolve(selectedOutput);
 
     try {
       await writeOutputFile(outputPath, Buffer.from(rendered, "utf8"), input.force);

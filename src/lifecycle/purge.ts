@@ -1,12 +1,14 @@
-import { lstat, readFile, unlink } from "node:fs/promises";
+import { unlink } from "node:fs/promises";
 import path from "node:path";
 
 import { FrictionFailure } from "../domain/failures.js";
+import { readRegularFileSafely } from "../platform/safe-file.js";
 import {
   loadEvents,
   type LoadedEvent,
 } from "../storage/load-events.js";
 import { resolveFrictionPaths } from "../storage/paths.js";
+import { verifyPrivateStoreFile } from "../storage/private-store.js";
 import { foldEvents } from "./fold.js";
 
 export type PurgeReceipt = {
@@ -28,20 +30,23 @@ async function assertUnchanged(
 ): Promise<void> {
   for (const entry of expected) {
     const eventPath = path.join(eventsDirectory, entry.fileName);
-    let status;
-    let bytes;
+    let read;
 
     try {
-      status = await lstat(eventPath);
-      bytes = await readFile(eventPath);
+      await verifyPrivateStoreFile(eventPath);
+      read = await readRegularFileSafely(
+        eventsDirectory,
+        eventPath,
+        entry.bytes.length,
+      );
     } catch {
       throw new FrictionFailure("output_conflict");
     }
 
     if (
-      status.isSymbolicLink() ||
-      !status.isFile() ||
-      !bytes.equals(entry.bytes)
+      !read.exists ||
+      read.bytes === null ||
+      !read.bytes.equals(entry.bytes)
     ) {
       throw new FrictionFailure("output_conflict");
     }
@@ -101,6 +106,7 @@ export async function purgeObservation(
 
     try {
       for (const entry of currentMatches) {
+        await assertUnchanged(paths.events, [entry]);
         await unlink(path.join(paths.events, entry.fileName));
       }
     } catch {

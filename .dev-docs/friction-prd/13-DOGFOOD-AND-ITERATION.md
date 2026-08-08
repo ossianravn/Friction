@@ -111,7 +111,7 @@ Treat these as hypotheses, not permanent metrics:
 - scoped package name selection;
 - Homebrew or standalone native binary;
 - automatic updater;
-- native Windows support;
+- Windows ARM64, private UNC storage, or native installer support;
 - signed releases and release automation.
 
 ## Principles for iteration

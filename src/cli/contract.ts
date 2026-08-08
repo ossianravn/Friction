@@ -60,7 +60,10 @@ export const commandContract: Record<ImplementedCommand, CommandContract> = {
       { name: "--area AREA", description: "Record one supported product area." },
       { name: "--impact IMPACT", description: "Record a repeatable supported impact." },
     ],
-    notes: ["Provide exactly one positional body or --stdin, never both."],
+    notes: [
+      "Provide exactly one positional body or --stdin, never both.",
+      "Agent and PowerShell capture should use --stdin so authored text is not a command argument.",
+    ],
     effects: privateAppend,
   },
   list: {
@@ -136,14 +139,20 @@ export const commandContract: Record<ImplementedCommand, CommandContract> = {
     purpose: "Preview or delete one observation's private event history.",
     syntax: ["friction purge ID [--apply]"],
     options: [{ name: "--apply", description: "Delete matching private event files." }],
-    notes: ["Preview is the default. Exports, projections, commits, and other shared copies remain."],
+    notes: [
+      "Preview is the default and writes nothing. Apply deletes only matching canonical private event files.",
+      "Exports, projections, commits, backups, and other shared copies remain.",
+    ],
     effects: { ...readOnly, readOnly: false, destructive: true, previewDefault: true },
   },
   doctor: {
     purpose: "Diagnose runtime, storage, repository, and setup health.",
     syntax: ["friction doctor"],
     options: [],
-    notes: ["May create and remove one harmless probe inside the private temp directory; never repairs findings."],
+    notes: [
+      "May create and remove one harmless probe inside the private temp directory; never repairs findings.",
+      "On Windows, checks the private ACL and required local-filesystem primitives with safe messages.",
+    ],
     effects: { ...readOnly, readOnly: false },
   },
   setup: {
@@ -154,7 +163,11 @@ export const commandContract: Record<ImplementedCommand, CommandContract> = {
       { name: "--undo", description: "Plan removal of known managed content." },
       { name: "--apply", description: "Apply the setup or undo plan." },
     ],
-    notes: ["Preview is the default and writes nothing. Generic setup is output-only."],
+    notes: [
+      "Preview is the default and writes nothing. Generic setup is output-only.",
+      "Native Windows Codex uses PowerShell guidance; Claude Code uses its documented Git Bash path.",
+      "Setup never edits shell profiles or installs the friction command.",
+    ],
     effects: { ...readOnly, readOnly: false, writesConfiguration: true, previewDefault: true },
   },
   schema: {

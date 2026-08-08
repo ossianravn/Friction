@@ -11,10 +11,7 @@ when apparent—the likely prevention. Record one distinct issue per task unless
 adds materially different evidence or impact. Add `--area` or `--impact` only when it is
 obvious.
 
-```sh
-printf '%s\n' "<what you were doing -> what got in the way -> likely prevention>" |
-  friction add --stdin --source {{SOURCE}}
-```
+{{COMMAND}}
 
 Do not record accomplishments, ordinary mistakes without a missing guardrail, tracked
 bugs, unsupported design opinions, secrets, transcripts, large output, or Friction's own

@@ -11,7 +11,9 @@ export type SkillAsset = {
 };
 
 export type SetupAssets = {
-  captureTemplate: string;
+  captureShared: string;
+  capturePosix: string;
+  capturePowerShell: string;
   skills: SkillAsset[];
 };
 
@@ -43,10 +45,12 @@ async function readDirectory(
 }
 
 export async function loadSetupAssets(): Promise<SetupAssets> {
-  const captureTemplate = await readFile(
-    path.join(packageRoot, "assets", "instructions", "capture.md"),
-    "utf8",
-  );
+  const instructionRoot = path.join(packageRoot, "assets", "instructions");
+  const [captureShared, capturePosix, capturePowerShell] = await Promise.all([
+    readFile(path.join(instructionRoot, "capture-shared.md"), "utf8"),
+    readFile(path.join(instructionRoot, "capture-posix.md"), "utf8"),
+    readFile(path.join(instructionRoot, "capture-powershell.md"), "utf8"),
+  ]);
   const skills: SkillAsset[] = [];
 
   for (const skillName of ["friction-review", "friction-fix"] as const) {
@@ -62,14 +66,47 @@ export async function loadSetupAssets(): Promise<SetupAssets> {
     }
   }
 
-  return { captureTemplate, skills };
+  return { captureShared, capturePosix, capturePowerShell, skills };
 }
 
 export function captureInstruction(
-  template: string,
+  assets: SetupAssets,
   source: "codex" | "claude-code" | "generic",
+  shell: "posix" | "powershell",
 ): Buffer {
-  return Buffer.from(template.replaceAll("{{SOURCE}}", source), "utf8");
+  const command = captureCommand(assets, source, shell);
+  return Buffer.from(assets.captureShared.replace("{{COMMAND}}", command), "utf8");
+}
+
+function captureCommand(
+  assets: SetupAssets,
+  source: "codex" | "claude-code" | "generic",
+  shell: "posix" | "powershell",
+): string {
+  const template = shell === "powershell"
+    ? assets.capturePowerShell
+    : assets.capturePosix;
+  return template.replaceAll("{{SOURCE}}", source).trimEnd();
+}
+
+export function genericCaptureSnippet(
+  assets: SetupAssets,
+  windows: boolean,
+): string {
+  const skills = `Skills: ${packagedSkillPaths().join(", ")}`;
+
+  if (!windows) {
+    return `${captureCommand(assets, "generic", "posix")}\n${skills}`;
+  }
+
+  return [
+    "PowerShell:",
+    captureCommand(assets, "generic", "powershell"),
+    "",
+    "Git Bash:",
+    captureCommand(assets, "generic", "posix"),
+    skills,
+  ].join("\n");
 }
 
 export function packagedSkillPaths(): string[] {

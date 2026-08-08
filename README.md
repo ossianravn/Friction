@@ -18,6 +18,21 @@ which fix is allowed, and whether any record should be added to a repository.
 Friction is currently an unpublished proof of concept for one developer working across
 one or more repositories.
 
+## Platform status
+
+| Environment | Status | Notes |
+|---|---|---|
+| macOS | Supported | Node.js 24. |
+| Linux | Supported | Node.js 24. |
+| Windows 11 x64 | Under validation | Native Node.js 24; Git for Windows for repository-aware behavior. |
+| Windows Server 2025 x64 | CI target | The mandatory hosted-runner gate is not complete yet. |
+| WSL | Supported through Linux behavior | Prefer the Linux filesystem for the project and private store. |
+| Windows ARM64 | Not yet claimed | Requires its own complete native acceptance pass. |
+
+The native Windows implementation now passes its private ACL, local-NTFS, npm command
+shim, Git for Windows, and isolated Codex/Claude setup gates. The remaining CI and
+end-to-end Windows 11 dogfood gates must pass before this README calls it supported.
+
 ## The workflow in plain language
 
 1. You work with Codex or Claude Code as usual.
@@ -41,12 +56,12 @@ for when you need more control.
 
 You need:
 
-- macOS or Linux;
 - Node.js 24 or newer;
 - npm; and
 - Codex or Claude Code.
 
-Friction is not published to npm yet. Build and install it from this repository:
+Friction is not published to npm yet. On macOS, Linux, WSL, or Git Bash, build and
+install it from this repository with:
 
 ```sh
 git clone https://github.com/ossianravn/Friction.git
@@ -55,6 +70,18 @@ npm ci
 npm run build
 npm pack
 npm install --global ./friction-0.0.0.tgz
+friction --version
+```
+
+In native Windows PowerShell, use:
+
+```powershell
+git clone https://github.com/ossianravn/Friction.git
+Set-Location Friction
+npm ci
+npm run build
+npm pack
+npm install --global .\friction-0.0.0.tgz
 friction --version
 ```
 
@@ -98,6 +125,13 @@ Setup adds three things to the selected coding agent:
 - a short instruction explaining when to record an observation;
 - a `friction-review` skill for read-only analysis; and
 - a `friction-fix` skill for explicitly authorized fixes.
+
+On native Windows, Codex receives a PowerShell capture instruction with explicit
+no-BOM UTF-8 handling. Claude Code receives the Git Bash form documented for native
+Windows. Generic setup prints both labeled forms. Setup preserves CRLF in existing
+Codex instructions, supports a custom `CODEX_HOME` outside your user home, never edits
+a PowerShell or shell profile, and never installs the CLI. Preview creates no files,
+directories, ACLs, locks, or private store.
 
 ### 3. Work normally
 
@@ -181,10 +215,22 @@ For machine-readable output, add `--json`. Use `friction --help` or
 
 ## Record an observation yourself
 
-Agent setup handles normal capture. You can also record something manually:
+Agent setup handles normal capture. You can also record something manually.
+
+On macOS, Linux, WSL, or Git Bash:
 
 ```sh
 printf '%s\n' "The setup guide used a removed command, which caused a failed first attempt." |
+  friction add --stdin --source manual
+```
+
+In native Windows PowerShell:
+
+```powershell
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+"The setup guide used a removed command, which caused a failed first attempt." |
   friction add --stdin --source manual
 ```
 
@@ -280,15 +326,24 @@ Default private storage locations:
 - Linux: `$XDG_DATA_HOME/friction` when `XDG_DATA_HOME` is set, otherwise
   `~/.local/share/friction`.
 - macOS: `~/Library/Application Support/friction`.
+- Native Windows: `%LOCALAPPDATA%\friction`.
 
 Set `FRICTION_HOME` if you need a different location. For development and tests, always
 point it at an isolated temporary directory rather than your live private store.
+
+On native Windows, `FRICTION_HOME` must be a fully qualified path on a local volume. A
+private UNC store, device path, drive-relative path, reparse path, or name Windows treats
+as unsafe is rejected. The verified baseline is local NTFS. Before Friction persists
+private bytes, it verifies an inheritance-protected ACL that grants access only to the
+current user and LocalSystem; unverifiable or broadened ACLs fail closed. This protects
+against ordinary cross-account access, not an administrator who can take ownership.
 
 ## Current limitations
 
 This is an unpublished proof of concept, not a polished public release.
 
-- It currently supports macOS and Linux, not Windows.
+- Native Windows 11 x64 remains under validation until its mandatory CI and dogfood
+  gates pass; Windows ARM64 and private UNC storage are not claimed.
 - It requires Node.js 24 or newer.
 - It is designed for one developer and local storage; there are no teams or sync.
 - It does not automatically understand or cluster observations. Review reasoning comes

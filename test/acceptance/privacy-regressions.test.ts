@@ -218,36 +218,14 @@ test("redaction-sensitive local Git paths fail attribution instead of sharing a 
   const failedRemoteRepository = path.join(context.root, "failed-remote");
   await mkdir(failedRemoteRepository);
   await runGit(failedRemoteRepository, ["init", "--quiet"]);
-  await runGit(failedRemoteRepository, [
-    "remote",
-    "add",
-    "origin",
-    "https://example.com/owner/repository.git",
-  ]);
-  const originalPath = process.env["PATH"];
-  assert.ok(originalPath);
-  const fakeGitDirectory = path.join(context.root, "fake-git");
-  await mkdir(fakeGitDirectory);
+  const gitConfig = path.join(failedRemoteRepository, ".git", "config");
   await writeFile(
-    path.join(fakeGitDirectory, "git"),
-    [
-      "#!/bin/sh",
-      'if [ "$1" = "remote" ] && [ "$2" = "get-url" ]; then',
-      "  exit 1",
-      "fi",
-      'PATH="$FRICTION_TEST_REAL_PATH" exec git "$@"',
-      "",
-    ].join("\n"),
-    { mode: 0o700 },
+    gitConfig,
+    `${await readFile(gitConfig, "utf8")}\n[remote "origin"]\n\turl = https://example.invalid/${"a".repeat(70_000)}\n`,
   );
-  const failedRemoteEnvironment = {
-    FRICTION_TEST_REAL_PATH: originalPath,
-    PATH: `${fakeGitDirectory}${path.delimiter}${originalPath}`,
-  };
   const failedRemoteCapture = await runFriction({
     arguments: ["add", "--stdin", "--json"],
     cwd: failedRemoteRepository,
-    environment: failedRemoteEnvironment,
     home: context.home,
     stdin: failedRemoteBody,
   });
@@ -260,7 +238,6 @@ test("redaction-sensitive local Git paths fail attribution instead of sharing a 
   const failedRemoteRead = await runFriction({
     arguments: ["list", "--status", "all", "--json"],
     cwd: failedRemoteRepository,
-    environment: failedRemoteEnvironment,
     home: context.home,
   });
   assert.equal(failedRemoteRead.code, 3);

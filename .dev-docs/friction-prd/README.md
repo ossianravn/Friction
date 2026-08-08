@@ -33,6 +33,7 @@ PoC.
 13. `11-TESTING-AND-QUALITY.md`
 14. `12-IMPLEMENTATION-PLAN.md`
 15. `13-DOGFOOD-AND-ITERATION.md`
+16. `16-NATIVE-WINDOWS.md`
 
 Read the entire bundle before changing files. Later documents refine earlier ones.
 When two passages appear to conflict, use the narrower responsibility document and
@@ -56,6 +57,7 @@ record the interpretation in the implementation plan before coding.
 | Test budget and release evidence | `11` |
 | Ordered implementation milestones | `12` |
 | Dogfood measurements and post-PoC decisions | `13` |
+| Native Windows scope, supersession, and release gate | `16` |
 
 ## Non-negotiable limits
 

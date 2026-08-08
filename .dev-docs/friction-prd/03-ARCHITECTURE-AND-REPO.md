@@ -100,7 +100,9 @@ tsconfig.build.json
 README.md
 assets/
   instructions/
-    capture.md
+    capture-shared.md
+    capture-posix.md
+    capture-powershell.md
 skills/
   friction-review/
     SKILL.md

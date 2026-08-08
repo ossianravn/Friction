@@ -87,7 +87,8 @@ same production seam instead of fragmenting them.
 - every redaction regex as an isolated test;
 - impossible UUID collisions;
 - thousands of events;
-- native Windows paths or permission semantics;
+- mocked Windows ACL, NTFS, junction, PowerShell, or npm-shim behavior as a
+  substitute for the required native acceptance in `16-NATIVE-WINDOWS.md`;
 - NFS, network filesystems, power loss, or distributed races;
 - simultaneous resolve/reopen of the same observation;
 - broad snapshots;

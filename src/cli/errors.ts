@@ -26,6 +26,16 @@ export const errorRegistry: Record<FailureCode, ErrorDefinition> = {
     exitCode: exitCodes.usageOrValidation,
     retryable: false,
   },
+  configuration_error: {
+    message: "Required platform configuration is unavailable.",
+    exitCode: exitCodes.usageOrValidation,
+    retryable: false,
+  },
+  capability_unavailable: {
+    message: "Required filesystem capabilities are unavailable.",
+    exitCode: exitCodes.safety,
+    retryable: false,
+  },
   not_found: {
     message: "The requested observation or repository was not found.",
     exitCode: exitCodes.notFound,
@@ -48,6 +58,11 @@ export const errorRegistry: Record<FailureCode, ErrorDefinition> = {
   },
   safety_failure: {
     message: "Safety screening failed; nothing was stored.",
+    exitCode: exitCodes.safety,
+    retryable: false,
+  },
+  indeterminate_store: {
+    message: "Private-store rollback could not be confirmed.",
     exitCode: exitCodes.safety,
     retryable: false,
   },

@@ -67,7 +67,9 @@ test("publish is preview-first, deterministic, scoped, merge-safe, and preimage-
   const firstBytes = await readFile(target);
   assert.equal(firstBytes.includes(Buffer.from(canary)), false);
   assert.equal(firstBytes.at(-1), 10);
-  assert.equal((await stat(target)).mode & 0o777, 0o644);
+  if (process.platform !== "win32") {
+    assert.equal((await stat(target)).mode & 0o777, 0o644);
+  }
   const records = firstBytes
     .toString("utf8")
     .trim()
@@ -102,7 +104,9 @@ test("publish is preview-first, deterministic, scoped, merge-safe, and preimage-
   assert.equal(repeated.data["state"], "noop");
   assert.equal((await readFile(target)).equals(firstBytes), true);
 
-  await chmod(target, 0o666);
+  if (process.platform !== "win32") {
+    await chmod(target, 0o666);
+  }
   const resolved = await runFriction({
     arguments: [
       "resolve",
@@ -128,7 +132,9 @@ test("publish is preview-first, deterministic, scoped, merge-safe, and preimage-
     updatedLines.map((line) => JSON.parse(line)).find((item) => item.observationId === firstId).status,
     "resolved",
   );
-  assert.equal((await stat(target)).mode & 0o777, 0o666);
+  if (process.platform !== "win32") {
+    assert.equal((await stat(target)).mode & 0o777, 0o666);
+  }
 
   const otherRepository = path.join(context.root, "other-repository");
   await initializeRepository(otherRepository);
@@ -146,7 +152,11 @@ test("publish is preview-first, deterministic, scoped, merge-safe, and preimage-
 
   const outside = path.join(context.root, "outside");
   await mkdir(outside);
-  await symlink(outside, path.join(repository, "linked-output"));
+  await symlink(
+    outside,
+    path.join(repository, "linked-output"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
   const escape = await runFriction({
     arguments: ["publish", secondId, "--output", "linked-output/data.jsonl", "--json"],
     cwd: repository,

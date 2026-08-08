@@ -61,7 +61,7 @@ function writeHelp(output: WritableOutput, command: ImplementedCommand | null): 
   output.write(
     `Usage: friction <command> [options]\n\nCommands:\n${commandNames
       .map((name) => `  ${name.padEnd(8)} ${commandContract[name].purpose}`)
-      .join("\n")}\n\nCommon options: --help, --version, --json\n`,
+      .join("\n")}\n\nCommon options: --help, --version, --json\n\nPlatforms: macOS, Linux, and native Windows (validation in progress).\nRun friction schema for the machine-readable platform, privacy, and side-effect contract.\n`,
   );
 }
 

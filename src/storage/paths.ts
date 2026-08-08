@@ -1,43 +1,33 @@
 import { lstat } from "node:fs/promises";
-import { homedir } from "node:os";
 import path from "node:path";
 
 import { FrictionFailure } from "../domain/failures.js";
+import {
+  resolvePrivateHome,
+  type PrivateHomeOptions,
+} from "../platform/safe-path.js";
+import { resolveRuntimePlatform } from "../platform/runtime-platform.js";
 
 export type FrictionPaths = {
   home: string;
   events: string;
   temporary: string;
+  setupLocks: string;
 };
 
-function selectedHomePath(): string {
-  const configuredHome = process.env["FRICTION_HOME"];
-
-  if (configuredHome !== undefined && configuredHome.length > 0) {
-    return configuredHome;
-  }
-
-  if (process.platform === "darwin") {
-    return path.join(homedir(), "Library", "Application Support", "friction");
-  }
-
-  if (process.platform === "linux") {
-    const dataHome = process.env["XDG_DATA_HOME"];
-    return dataHome !== undefined && dataHome.length > 0
-      ? path.join(dataHome, "friction")
-      : path.join(homedir(), ".local", "share", "friction");
-  }
-
-  throw new FrictionFailure("unsupported_platform");
-}
-
-export function resolveFrictionPaths(): FrictionPaths {
-  const home = path.resolve(selectedHomePath());
+export function resolveFrictionPaths(
+  options: PrivateHomeOptions = {},
+): FrictionPaths {
+  const platform = options.platform ?? resolveRuntimePlatform();
+  const home = resolvePrivateHome({ ...options, platform });
+  const platformPath = platform === "win32" ? path.win32 : path.posix;
+  const versionRoot = platformPath.join(home, "v1");
 
   return {
     home,
-    events: path.join(home, "v1", "events"),
-    temporary: path.join(home, "v1", "tmp"),
+    events: platformPath.join(versionRoot, "events"),
+    temporary: platformPath.join(versionRoot, "tmp"),
+    setupLocks: platformPath.join(versionRoot, "setup-locks"),
   };
 }
 

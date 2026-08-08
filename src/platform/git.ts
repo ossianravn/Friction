@@ -1,38 +1,37 @@
 import { spawn } from "node:child_process";
 
-const MAXIMUM_OUTPUT_BYTES = 64 * 1_024;
-const OUTSIDE_REPOSITORY_ERROR =
-  "fatal: not a git repository (or any of the parent directories): .git";
+import { buildChildEnvironment } from "./environment.js";
+import { resolveRuntimePlatform } from "./runtime-platform.js";
 
+const MAXIMUM_OUTPUT_BYTES = 64 * 1_024;
 export type GitCommandResult =
   | { status: "ok"; stdout: string }
-  | { status: "failed"; reason: "not-repository" | "command" }
+  | { status: "failed" }
   | { status: "interrupted" }
   | { status: "unavailable" };
 
-function failureReason(stderr: Buffer[]): "not-repository" | "command" {
-  return Buffer.concat(stderr).toString("utf8").trim() === OUTSIDE_REPOSITORY_ERROR
-    ? "not-repository"
-    : "command";
+function normalizedText(bytes: Buffer): string {
+  return bytes.toString("utf8").replaceAll("\r\n", "\n").replaceAll("\r", "\n");
 }
 
 export async function runGit(
   arguments_: readonly string[],
   cwd: string,
 ): Promise<GitCommandResult> {
+  const platform = resolveRuntimePlatform();
   return new Promise((resolve) => {
     let child;
 
     try {
       child = spawn("git", arguments_, {
         cwd,
-        env: {
-          ...process.env,
+        env: buildChildEnvironment({
           GIT_OPTIONAL_LOCKS: "0",
           GIT_TERMINAL_PROMPT: "0",
-          LC_ALL: "C",
-        },
+          ...(platform === "win32" ? {} : { LC_ALL: "C" }),
+        }),
         stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: platform === "win32",
       });
     } catch {
       resolve({ status: "unavailable" });
@@ -40,7 +39,6 @@ export async function runGit(
     }
 
     const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
     let byteCount = 0;
     let settled = false;
     let interrupted = false;
@@ -57,6 +55,7 @@ export async function runGit(
     timer = setTimeout(() => {
       interrupted = true;
       child.kill();
+      settle({ status: "interrupted" });
     }, 5_000);
 
     child.stdout.on("data", (chunk: Buffer) => {
@@ -65,6 +64,7 @@ export async function runGit(
       if (byteCount > MAXIMUM_OUTPUT_BYTES) {
         interrupted = true;
         child.kill();
+        settle({ status: "interrupted" });
         return;
       }
 
@@ -76,10 +76,10 @@ export async function runGit(
       if (byteCount > MAXIMUM_OUTPUT_BYTES) {
         interrupted = true;
         child.kill();
+        settle({ status: "interrupted" });
         return;
       }
 
-      stderr.push(chunk);
     });
     child.on("error", () => settle({ status: "unavailable" }));
     child.on("close", (code, signal) => {
@@ -89,11 +89,11 @@ export async function runGit(
       }
 
       if (code !== 0) {
-        settle({ status: "failed", reason: failureReason(stderr) });
+        settle({ status: "failed" });
         return;
       }
 
-      settle({ status: "ok", stdout: Buffer.concat(stdout).toString("utf8") });
+      settle({ status: "ok", stdout: normalizedText(Buffer.concat(stdout)) });
     });
   });
 }

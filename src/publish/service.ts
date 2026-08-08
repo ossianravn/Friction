@@ -1,6 +1,8 @@
 import path from "node:path";
 
 import { FrictionFailure } from "../domain/failures.js";
+import { resolveRuntimePlatform } from "../platform/runtime-platform.js";
+import { assertSafeWindowsPathInput } from "../platform/windows/path-policy.js";
 import { compareText } from "../domain/sort.js";
 import { foldEvents } from "../lifecycle/fold.js";
 import { discoverRepository } from "../repository/discover.js";
@@ -106,7 +108,11 @@ export async function buildPublishPlan(
         return record;
       });
   const selected = selectedRecords.map(toPublishedObservation);
-  const targetPath = path.resolve(root, input.output ?? ".friction/observations.jsonl");
+  const selectedOutput = input.output ?? ".friction/observations.jsonl";
+  const safeOutput = resolveRuntimePlatform() === "win32"
+    ? assertSafeWindowsPathInput(selectedOutput)
+    : selectedOutput;
+  const targetPath = path.resolve(root, safeOutput);
   const snapshot = await inspectPublishTarget(root, targetPath);
   const merged = new Map(snapshot.records.map((record) => [record.observationId, record]));
   let creates = 0;

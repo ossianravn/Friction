@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, symlink, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -13,7 +13,8 @@ import { runFriction, runGit } from "../support/process.js";
 
 test("export writes screened projections safely and purge previews before deleting private history", async () => {
   const context = await makeAcceptanceFixture("friction-export-");
-  const repository = path.join(context.work, "repo-<b>[x]");
+  const repositoryName = process.platform === "win32" ? "repo-[x]" : "repo-<b>[x]";
+  const repository = path.join(context.work, repositoryName);
   const nested = path.join(repository, "nested");
   await mkdir(nested, { recursive: true });
   await runGit(repository, ["init", "--initial-branch=main"]);
@@ -41,9 +42,9 @@ test("export writes screened projections safely and purge previews before deleti
   assert.equal(markdown.includes(body), true);
   assert.equal(markdown.includes("````\n"), true);
   assert.equal(markdown.includes(repository), false);
-  assert.equal(markdown.includes("Scope: `repo-<b>[x]`"), true);
-  assert.equal(markdown.includes("Repository: `repo-<b>[x]:nested`"), true);
-  assert.equal(markdown.includes("Scope: repo-<b>[x]"), false);
+  assert.equal(markdown.includes(`Scope: \`${repositoryName}\``), true);
+  assert.equal(markdown.includes(`Repository: \`${repositoryName}:nested\``), true);
+  assert.equal(markdown.includes(`Scope: ${repositoryName}`), false);
 
   const output = path.join(context.root, "private-export.jsonl");
   const fileResult = await runFriction({
@@ -61,9 +62,38 @@ test("export writes screened projections safely and purge previews before deleti
     home: context.home,
   });
   assert.equal(fileResult.code, 0);
-  assert.equal((await stat(output)).mode & 0o777, 0o600);
+  if (process.platform !== "win32") {
+    assert.equal((await stat(output)).mode & 0o777, 0o600);
+  }
   const exportedBytes = await readFile(output, "utf8");
   assert.equal(exportedBytes.includes(body), true);
+
+  if (process.platform !== "win32") {
+    const canonicalDirectory = path.join(context.root, "canonical-export");
+    const linkedDirectory = path.join(context.root, "linked-export");
+    const linkedOutput = path.join(linkedDirectory, "observations.jsonl");
+    await mkdir(canonicalDirectory);
+    await symlink(canonicalDirectory, linkedDirectory, "dir");
+    const linkedResult = await runFriction({
+      arguments: [
+        "export",
+        "--status",
+        "all",
+        "--format",
+        "jsonl",
+        "--output",
+        linkedOutput,
+        "--json",
+      ],
+      cwd: nested,
+      home: context.home,
+    });
+    assert.equal(linkedResult.code, 0);
+    assert.equal(
+      (await readFile(path.join(canonicalDirectory, "observations.jsonl"), "utf8")).includes(body),
+      true,
+    );
+  }
 
   const unrelatedId = await addObservation(
     context.home,

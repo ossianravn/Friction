@@ -77,7 +77,7 @@ The shipped instruction must communicate:
 - never log a Friction failure as another observation;
 - never run transcript review automatically.
 
-Example command in the asset:
+POSIX and Git Bash command in the asset:
 
 ```sh
 printf '%s\n' "<what you were doing -> what got in the way -> likely prevention>" |
@@ -86,6 +86,11 @@ printf '%s\n' "<what you were doing -> what got in the way -> likely prevention>
 
 Use the Claude source in the Claude adapter. The generic snippet uses `generic`.
 Optional `--area` and `--impact` may be added only when obvious.
+
+Native Windows Codex uses a PowerShell form that sets a no-BOM UTF-8
+`$OutputEncoding` and sends the body through stdin. Native Windows Claude Code uses
+the POSIX form through its documented Git Bash path. Generic Windows setup prints
+both forms with explicit shell labels.
 
 ## Safe setup plan
 
@@ -138,6 +143,10 @@ User scope:
 - user skills target `$HOME/.agents/skills/friction-review/` and
   `$HOME/.agents/skills/friction-fix/`.
 
+On native Windows, resolve `CODEX_HOME` case-insensitively and install the PowerShell
+capture form. `CODEX_HOME` may be outside `HOME`; each target keeps its own canonical
+ownership root. Preserve CRLF and never edit a PowerShell profile.
+
 Repository scope:
 
 - require current Git worktree;
@@ -158,6 +167,9 @@ setup conflict rather than claiming installation in a shadowed file.
 ## Claude Code adapter
 
 Use current official Claude Code paths at implementation time.
+
+On native Windows, use Windows paths for owned files and the POSIX capture form for
+Claude Code's documented Git Bash environment.
 
 User scope:
 

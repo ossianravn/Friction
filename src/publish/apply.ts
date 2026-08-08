@@ -1,8 +1,12 @@
-import { randomUUID } from "node:crypto";
-import { link, lstat, mkdir, open, rename, unlink } from "node:fs/promises";
+import { lstat, mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { FrictionFailure } from "../domain/failures.js";
+import {
+  commitStagedFile,
+  discardStagedFile,
+  stageFileReplacement,
+} from "../platform/atomic-file.js";
 import {
   inspectPublishTarget,
   rejectSymlinkedPublishParents,
@@ -38,19 +42,6 @@ async function ensureParent(root: string, targetPath: string): Promise<void> {
   }
 }
 
-async function flushDirectory(directory: string): Promise<void> {
-  let handle;
-
-  try {
-    handle = await open(directory, "r");
-    await handle.sync();
-  } catch {
-    // Directory fsync is best-effort across supported local filesystems.
-  } finally {
-    await handle?.close().catch(() => undefined);
-  }
-}
-
 export async function applyPublishPlan(plan: PublishPlan): Promise<void> {
   if (plan.snapshot.bytes.equals(plan.desiredBytes)) {
     return;
@@ -70,38 +61,27 @@ export async function applyPublishPlan(plan: PublishPlan): Promise<void> {
     throw new FrictionFailure("publish_conflict");
   }
 
-  const directory = path.dirname(plan.targetPath);
-  const temporaryPath = path.join(directory, `.friction-${randomUUID().replaceAll("-", "")}.tmp`);
-  let handle;
+  const temporaryPath = await stageFileReplacement(
+    plan.targetPath,
+    plan.desiredBytes,
+    plan.snapshot.mode ?? 0o644,
+  );
 
   try {
-    handle = await open(temporaryPath, "wx", plan.snapshot.mode ?? 0o644);
-    await handle.chmod(plan.snapshot.mode ?? 0o644);
-    await handle.writeFile(plan.desiredBytes);
-    await handle.sync();
-    await handle.close();
-    handle = undefined;
-    const beforeCommit = await inspectPublishTarget(plan.root, plan.targetPath);
+    await commitStagedFile({
+      temporaryPath,
+      targetPath: plan.targetPath,
+      targetExists: plan.snapshot.exists,
+      conflictCode: "publish_conflict",
+      assertUnchanged: async () => {
+        await rejectSymlinkedPublishParents(plan.root, plan.targetPath);
+        const current = await inspectPublishTarget(plan.root, plan.targetPath);
 
-    if (!samePublishSnapshot(beforeCommit, plan.snapshot)) {
-      throw new FrictionFailure("publish_conflict");
-    }
-
-    if (plan.snapshot.exists) {
-      await rename(temporaryPath, plan.targetPath);
-    } else {
-      try {
-        await link(temporaryPath, plan.targetPath);
-      } catch (error) {
-        if (isCode(error, "EEXIST")) {
+        if (!samePublishSnapshot(current, plan.snapshot)) {
           throw new FrictionFailure("publish_conflict");
         }
-
-        throw error;
-      }
-    }
-
-    await flushDirectory(directory);
+      },
+    });
   } catch (error) {
     if (error instanceof FrictionFailure) {
       throw error;
@@ -109,7 +89,6 @@ export async function applyPublishPlan(plan: PublishPlan): Promise<void> {
 
     throw new FrictionFailure("io_error");
   } finally {
-    await handle?.close().catch(() => undefined);
-    await unlink(temporaryPath).catch(() => undefined);
+    await discardStagedFile(temporaryPath);
   }
 }
