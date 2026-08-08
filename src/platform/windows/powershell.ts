@@ -61,7 +61,6 @@ export async function runEncodedWindowsPowerShell(
   const encoded = Buffer.from(script, "utf16le").toString("base64");
   const executable = executablePath();
   const blockedProfileRoot = path.win32.join(executable, "profile");
-  const systemModulePath = path.win32.join(path.win32.dirname(executable), "Modules");
 
   return new Promise((resolve, reject) => {
     let child;
@@ -78,7 +77,7 @@ export async function runEncodedWindowsPowerShell(
               HOME: blockedProfileRoot,
               LOCALAPPDATA: blockedProfileRoot,
               PSModuleAnalysisCachePath: "NUL",
-              PSModulePath: systemModulePath,
+              PSModulePath: blockedProfileRoot,
               USERPROFILE: blockedProfileRoot,
             },
             process.env,
