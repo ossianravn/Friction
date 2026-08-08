@@ -38,8 +38,8 @@ Adapt:
 
 - Do not require every issue to occur twice. A first occurrence can be severe,
   misleading, or broadly systemic.
-- Capture once per distinct issue per task by default. A second same-task record is
-  valid only when it adds new evidence, impact, or a meaningfully different path.
+- Capture each encounter once. A same-task recurrence is valid when it imposes another
+  concrete cost; restating the same incident is not a new encounter.
 - Store structured private events instead of appending a repository Markdown file.
 
 Reject for the PoC:
@@ -120,8 +120,8 @@ Keep:
 Adapt:
 
 - Use Node.js and a simple event directory instead of Bun and SQLite for the PoC.
-- Keep repeated observations across sessions, while suppressing same-task duplicate
-  chatter through instructions rather than hidden deduplication.
+- Keep repeated costly encounters across and within sessions, while suppressing
+  restatements through instructions rather than hidden deduplication.
 - Split pure review from explicit fixing so analysis never implies authorization to
   modify code.
 

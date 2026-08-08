@@ -1,4 +1,5 @@
 ```sh
-printf '%s\n' "<what you were doing -> what got in the way -> likely prevention>" |
-  friction add --stdin --source {{SOURCE}}
+friction add --stdin --source {{SOURCE}} <<'FRICTION_NOTE'
+<what you were doing -> what happened and what it cost -> workaround or suspected prevention>
+FRICTION_NOTE
 ```

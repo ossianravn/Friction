@@ -5,6 +5,7 @@ import test from "node:test";
 
 import { FrictionFailure } from "../../src/domain/failures.js";
 import { applySetupPlan } from "../../src/setup/apply.js";
+import { knownManagedDigests } from "../../src/setup/managed-assets.js";
 import { buildSetupPlan } from "../../src/setup/plan.js";
 import { ownedFileState } from "../../src/setup/target-plan.js";
 import { envelope, makeAcceptanceFixture } from "../support/acceptance.js";
@@ -85,16 +86,18 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
   assert.equal(applied.code, 0);
   assert.equal(envelope(applied).warnings[0]?.["code"], "path_unavailable");
   const installed = await readFile(agentsFile);
+  const installedText = installed.toString("utf8");
   const managedMarker = Buffer.from("<!-- friction:managed:start v1 -->");
   assert.equal(installed.includes(Buffer.from("friction add --stdin --source codex")), true);
   assert.equal(installed.subarray(0, original.length).equals(original), true);
   assert.equal(installed.indexOf(managedMarker) > original.length, true);
   if (process.platform === "win32") {
-    const installedText = installed.toString("utf8");
     assert.equal(installedText.includes("$OutputEncoding = $utf8NoBom"), true);
-    assert.equal(installedText.includes("printf '%s"), false);
+    assert.equal(installedText.includes("@'"), true);
     assert.equal(installedText.replaceAll("\r\n", "").includes("\n"), false);
   } else {
+    assert.equal(installedText.includes("<<'FRICTION_NOTE'"), true);
+    assert.equal(installedText.includes("printf '%s"), false);
     assert.equal((await stat(agentsFile)).mode & 0o777, 0o666);
   }
   const reviewSkill = path.join(userHome, ".agents", "skills", "friction-review", "SKILL.md");
@@ -187,6 +190,14 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
     ownedFileState("known-prior", "current", ["known-prior", "current"], true),
     "remove",
   );
+  assert.equal(
+    knownManagedDigests("claude-rule").includes("3ca9a1ac9010677216867f37c5f8d2297cfb7a1ee2ee378137c9f715ba2b5595"),
+    true,
+  );
+  assert.equal(
+    knownManagedDigests("friction-review/references/review-policy.md").includes("6abf3cb11f82321c7b8a9a602da17f1047ff40a705824aac84ab95aa8870fdfd"),
+    true,
+  );
 
   const claudeApply = await runFriction({
     arguments: ["setup", "claude-code", "--apply", "--json"],
@@ -198,8 +209,9 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
   const rule = path.join(userHome, ".claude", "rules", "friction.md");
   const ruleText = await readFile(rule, "utf8");
   assert.equal(ruleText.includes("friction add --stdin --source claude-code"), true);
+  assert.equal(ruleText.includes("<<'FRICTION_NOTE'"), true);
+  assert.equal(ruleText.includes("printf '%s\\n'"), false);
   if (process.platform === "win32") {
-    assert.equal(ruleText.includes("printf '%s\\n'"), true);
     assert.equal(ruleText.includes("$OutputEncoding"), false);
   }
   await writeFile(rule, "user changed this managed file\n");

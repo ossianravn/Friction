@@ -50,9 +50,10 @@ review workflow verifies causes and chooses action.
 
 ## Same-task recurrence rule
 
-- Record each distinct issue once per task by default.
-- A second record for the same apparent issue in the same task is allowed only when it
-  adds materially different impact, context, or evidence.
+- Record each encounter once.
+- Record a recurrence when the same friction causes another concrete retry,
+  workaround, delay, or wrong conclusion, including later in the same task.
+- Do not create another record merely by restating the same incident.
 - Do not silently deduplicate across tasks or days. Repeated later encounters are the
   recurrence signal.
 - The PoC has no task ID or cooldown mechanism. This is instruction policy, not hidden
@@ -68,10 +69,11 @@ Body rules:
 - normalize CRLF to LF and trim outer whitespace;
 - reject empty input and NUL bytes;
 - limit to 4,096 UTF-8 bytes before redaction;
-- describe `what was being done -> what got in the way -> likely prevention`;
-- a suspected cause or fix is optional and remains a hypothesis;
+- describe `what was being done -> observed obstacle and cost -> useful workaround`;
+- state observed facts first; a cause or prevention is suspected unless verified;
 - do not accept both positional text and `--stdin`;
-- installed agent guidance always uses stdin so text avoids argv and shell history.
+- installed agent guidance uses literal-safe stdin so text avoids process argv;
+- inline shell text may still appear in shell history or the harness transcript.
 
 ## Optional capture fields
 

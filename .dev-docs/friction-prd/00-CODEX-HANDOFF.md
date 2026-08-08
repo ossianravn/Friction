@@ -78,8 +78,8 @@ Do not pause to ask about these:
   targets; WSL follows Linux behavior and is not native-Windows evidence.
 - A capture failure is visible but must not stop the agent’s primary coding task.
 - Observation diagnoses are hypotheses until review verifies them.
-- Repeated observations across sessions are useful signal. Duplicate spam within one
-  task is not.
+- Each separately costly encounter is useful recurrence signal, including within one
+  task. Restating the same incident is duplicate spam and is not useful.
 
 ## Ambiguity policy
 

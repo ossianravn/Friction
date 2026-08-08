@@ -116,13 +116,14 @@ wrong evidence, avoidable delay, or unclear ownership.
 
 - The body is the only required authored field. Omit optional metadata rather than
   guess.
-- Record one distinct issue per task by default. A same-task repeat must add materially
-  different evidence or impact; preserve later repeats across tasks and days.
+- Record each encounter once. Record a recurrence when it causes another concrete
+  retry, workaround, delay, or wrong conclusion; do not restate the same incident.
 - Do not add hidden deduplication, task IDs, cooldowns, embeddings, or semantic
   clustering to the CLI.
-- Do not record accomplishments, routine mistakes without a missing guardrail, tracked
-  bugs, unsupported style opinions, speculative redesign wishes, secrets, transcripts,
-  large output, or Friction's own capture failure.
+- Do not record accomplishments, routine mistakes without a missing guardrail,
+  preference-only design criticism, speculative redesign wishes, or the tracked bug
+  itself; record only separate workflow friction it exposes. Never include secrets,
+  transcripts, environment values, diffs, or raw or large output.
 - A claimed cause is a hypothesis until review verifies the owning code, docs, config,
   script, or instruction.
 - Resolve and reopen append lifecycle events; they never rewrite observations.

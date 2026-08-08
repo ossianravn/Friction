@@ -6,6 +6,10 @@ Cluster by the observed mechanism, not merely area or repository name. Preserve 
 records. For each signature, report encounter count, distinct days, first and last
 encounter, distinct repositories, impact mix, and open/resolved mix.
 
+Count each separately captured concrete cost as encounter evidence. Preserve possible
+duplicate restatements, but identify them as capture noise rather than treating them as
+stronger recurrence.
+
 ## Classify and rank
 
 Classify each signature as either:

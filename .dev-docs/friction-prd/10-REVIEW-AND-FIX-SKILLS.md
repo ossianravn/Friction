@@ -77,6 +77,10 @@ Do not discard repeated records. For each signature calculate:
 - impact mix;
 - open/resolved mix.
 
+Count each separately captured concrete cost as encounter evidence. Preserve possible
+duplicate restatements in the corpus, but identify them as capture noise rather than
+treating them as stronger recurrence.
+
 ### Phase 3: classify and rank
 
 Classify signatures as:

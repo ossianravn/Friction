@@ -237,8 +237,9 @@ Agent setup handles normal capture. You can also record something manually.
 On macOS, Linux, WSL, or Git Bash:
 
 ```sh
-printf '%s\n' "The setup guide used a removed command, which caused a failed first attempt." |
-  friction add --stdin --source manual
+friction add --stdin --source manual <<'FRICTION_NOTE'
+The setup guide used a removed command, which caused a failed first attempt.
+FRICTION_NOTE
 ```
 
 In native Windows PowerShell:
@@ -246,13 +247,18 @@ In native Windows PowerShell:
 ```powershell
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = $utf8NoBom
+[Console]::InputEncoding = $utf8NoBom
 [Console]::OutputEncoding = $utf8NoBom
-"The setup guide used a removed command, which caused a failed first attempt." |
-  friction add --stdin --source manual
+
+@'
+The setup guide used a removed command, which caused a failed first attempt.
+'@ | friction add --stdin --source manual
 ```
 
-Standard input is preferred because it keeps the observation text out of your shell
-history. A successful capture returns a receipt without repeating the text you submitted.
+Standard input keeps the observation out of Friction's command-line arguments and
+process information. Text entered inline may still appear in your shell history or the
+coding agent's transcript. A successful capture returns a receipt without repeating the
+text you submitted.
 
 ## Keep observations private or share them deliberately
 

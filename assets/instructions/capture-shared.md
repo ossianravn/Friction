@@ -1,20 +1,25 @@
-# Friction capture
+## Friction capture
 
-Record concrete, avoidable friction without asking the user when a system, repository,
-instruction, design, or tool property causes retry, backtracking, a workaround, extra
-search, blocking, plausible false evidence, an avoidable slow path, or unclear ownership.
-This includes codebase design, ownership, stale docs or guides, misleading abstractions,
-scripts, tooling, tests, dependencies, configuration, and harness behavior.
+Proactively record concrete, avoidable friction without asking the user when a
+repository, instruction, design, tool, dependency, configuration, environment, or
+harness causes observable extra cost: a retry, backtracking, a workaround, extra
+search, blocking, an avoidable slow path, unclear ownership, or a tool that appears
+to succeed but returns a plausible wrong or incomplete result. This includes codebase
+design, stale docs or guides, misleading abstractions, scripts, tests, and ownership
+boundaries. Small non-blocking issues count.
 
-Use one or two sentences: what you were doing, the obstacle and its effect, and—only
-when apparent—the likely prevention. Record one distinct issue per task unless a repeat
-adds materially different evidence or impact. Add `--area` or `--impact` only when it is
-obvious.
+Use one or two sentences: what you were doing, the observed obstacle and cost, and—
+when useful—the workaround that worked. State facts first; treat any cause or
+prevention as suspected unless verified. Record each encounter once. Record a
+recurrence when it causes another concrete cost, but do not duplicate the same
+incident. Omit optional metadata rather than guess.
 
 {{COMMAND}}
 
-Do not record accomplishments, ordinary mistakes without a missing guardrail, tracked
-bugs, unsupported design opinions, secrets, transcripts, large output, or Friction's own
-capture failure. Finish the immediate step, capture briefly, and continue the primary
-task. If capture fails, continue without logging that failure as another observation.
-Never run transcript review automatically.
+Do not record accomplishments, preference-only design criticism, ordinary mistakes
+unless they expose a missing guardrail, or the tracked bug itself; record only
+separate workflow friction it exposes. Never include secrets, transcripts,
+environment values, diffs, or raw or large output—summarize instead. Finish the
+immediate step, capture before context is lost, and continue the primary task. If
+capture fails, continue and do not log that failure. Never review transcripts
+automatically.

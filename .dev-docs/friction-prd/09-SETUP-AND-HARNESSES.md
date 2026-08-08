@@ -67,12 +67,16 @@ The shipped instruction must communicate:
   tooling, tests, dependencies, configuration, and harness friction;
 - capture when it causes retry, backtracking, workaround, extra search, blocking,
   false evidence, slow path, or unclear ownership;
-- use one or two sentences: task context, obstacle/effect, optional prevention;
-- call through stdin with the adapter source;
-- record one distinct issue per task unless recurrence adds new evidence;
-- do not record accomplishments, ordinary mistakes, tracked bugs, unsupported design
-  opinions, secrets, transcripts, or large output;
-- finish the immediate step and continue the primary task;
+- define false evidence as plausible wrong or incomplete output that appears successful;
+- use one or two sentences: task context, observed obstacle/cost, useful workaround;
+- state facts first and label unverified cause or prevention as suspected;
+- call through literal-safe stdin with the adapter source;
+- record each encounter once and another recurrence only for another concrete cost;
+- omit optional metadata rather than guess;
+- exclude accomplishments, preference-only criticism, ordinary mistakes without a
+  missing guardrail, and the tracked bug itself;
+- exclude secrets, transcripts, environment values, diffs, and raw or large output;
+- finish the immediate step, capture before context is lost, and continue the task;
 - continue if Friction capture fails;
 - never log a Friction failure as another observation;
 - never run transcript review automatically.
@@ -80,17 +84,18 @@ The shipped instruction must communicate:
 POSIX and Git Bash command in the asset:
 
 ```sh
-printf '%s\n' "<what you were doing -> what got in the way -> likely prevention>" |
-  friction add --stdin --source codex
+friction add --stdin --source codex <<'FRICTION_NOTE'
+<what you were doing -> what happened and what it cost -> workaround or suspected prevention>
+FRICTION_NOTE
 ```
 
 Use the Claude source in the Claude adapter. The generic snippet uses `generic`.
-Optional `--area` and `--impact` may be added only when obvious.
+Omit optional metadata rather than guess.
 
 Native Windows Codex uses a PowerShell form that sets a no-BOM UTF-8
-`$OutputEncoding` and sends the body through stdin. Native Windows Claude Code uses
-the POSIX form through its documented Git Bash path. Generic Windows setup prints
-both forms with explicit shell labels.
+`$OutputEncoding` and sends a single-quoted here-string through stdin. Native Windows
+Claude Code uses the quoted-delimiter POSIX heredoc through its documented Git Bash
+path. Generic Windows setup prints both forms with explicit shell labels.
 
 ## Safe setup plan
 
