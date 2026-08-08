@@ -23,7 +23,7 @@ foreach ($rule in $rules) {
   $identity = $expected -contains $rule.IdentityReference.Value
   $allow = $rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow
   $full = [int64]$rule.FileSystemRights -eq [int64][System.Security.AccessControl.FileSystemRights]::FullControl
-  $inheritance = $rule.InheritanceFlags -eq $expectedInheritance
+  $inheritance = -not $targetIsDirectory -or $rule.InheritanceFlags -eq $expectedInheritance
   if (-not ($identity -and $allow -and $full -and $inheritance)) { $unexpectedCount++ }
 }
 $missingCount = 0
@@ -32,7 +32,7 @@ foreach ($identity in $expected) {
     $_.IdentityReference.Value -eq $identity -and
     $_.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
     [int64]$_.FileSystemRights -eq [int64][System.Security.AccessControl.FileSystemRights]::FullControl -and
-    $_.InheritanceFlags -eq $expectedInheritance
+    (-not $targetIsDirectory -or $_.InheritanceFlags -eq $expectedInheritance)
   })
   if ($matching.Count -eq 0) { $missingCount++ }
 }

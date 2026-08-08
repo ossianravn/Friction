@@ -82,12 +82,13 @@ foreach ($rule in $rules) {
   $identityExpected = $rule.IdentityReference.Value -eq $current.Value -or
     $rule.IdentityReference.Value -eq $system.Value
   $rightsExpected = $rule.FileSystemRights -eq $fullControl
-  $inheritanceExpected = $rule.InheritanceFlags -eq $expectedInheritance
+  $inheritanceExpected = -not $directory -or
+    ($rule.InheritanceFlags -eq $expectedInheritance -and
+      $rule.PropagationFlags -eq $none)
   $ruleExpected = $identityExpected -and
     $rule.AccessControlType -eq $allow -and
     $rightsExpected -and
-    $inheritanceExpected -and
-    $rule.PropagationFlags -eq $none
+    $inheritanceExpected
 
   if (-not $ruleExpected) {
     $unexpected += 1
