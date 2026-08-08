@@ -40,13 +40,5 @@ jobs:
           "NPM_CONFIG_PREFIX=$npmPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           $npmPrefix | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - run: npm ci
-      - name: Probe native Windows ACL facts
-        if: matrix.os == 'windows-2025'
-        shell: pwsh
-        run: |
-          $probe = Join-Path $env:RUNNER_TEMP "friction-acl-probe"
-          New-Item -ItemType Directory -Force $probe | Out-Null
-          $env:FRICTION_ACL_PROBE = $probe
-          node --import tsx --input-type=module -e "import { windowsAclScript } from './src/platform/windows/acl-script.ts'; import { runEncodedWindowsPowerShell } from './src/platform/windows/powershell.ts'; console.log(await runEncodedWindowsPowerShell(windowsAclScript, { FRICTION_WINDOWS_ACL_ACTION: 'secure-directory', FRICTION_WINDOWS_ACL_TARGET: process.env.FRICTION_ACL_PROBE }));"
       - run: npm run check
       - run: npm run pack:smoke
