@@ -50,7 +50,8 @@ jobs:
           import path from "node:path";
           import { securePrivateDirectory, verifyPrivateDirectory } from "./src/platform/windows/acl.ts";
           import { inspectWindowsPathComponents } from "./src/platform/windows/reparse.ts";
-          import { ensureEventStore } from "./src/storage/private-store.ts";
+          import { installPrivateFileExclusively } from "./src/platform/fs.ts";
+          import { ensureEventStore, verifyPrivateStoreFile } from "./src/storage/private-store.ts";
           const root = await mkdtemp(path.join(tmpdir(), "friction-store-probe-"));
           const home = path.join(root, "home");
           const volume = path.parse(home).root;
@@ -74,6 +75,22 @@ jobs:
           } catch (error) {
             console.log(`event-store-${error?.code ?? "unknown"}`);
           }
+          const installed = await installPrivateFileExclusively(
+            paths.temporary,
+            path.join(paths.events, "probe.json"),
+            Buffer.from("safe synthetic probe"),
+            {
+              temporaryCreated: async (target) => {
+                await verifyPrivateStoreFile(target);
+                console.log("temporary-file-ok");
+              },
+              installed: async (target) => {
+                await verifyPrivateStoreFile(target);
+                console.log("installed-file-ok");
+              },
+            },
+          );
+          console.log(`install-${installed}`);
           '@
           node --import tsx --input-type=module -e $probeScript
       - run: npm run check
