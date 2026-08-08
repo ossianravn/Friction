@@ -5,8 +5,13 @@ import path from "node:path";
 const inspectScript = `
 $ErrorActionPreference = "Stop"
 $target = [Environment]::GetEnvironmentVariable("FRICTION_TEST_ACL_PATH")
-$acl = Get-Acl -LiteralPath $target
-$targetIsDirectory = (Get-Item -LiteralPath $target -Force).PSIsContainer
+$targetIsDirectory = [IO.Directory]::Exists($target)
+$sections = [Security.AccessControl.AccessControlSections]::Access -bor [Security.AccessControl.AccessControlSections]::Owner
+$acl = if ($targetIsDirectory) {
+  [IO.Directory]::GetAccessControl($target, $sections)
+} else {
+  [IO.File]::GetAccessControl($target, $sections)
+}
 $expectedInheritance = if ($targetIsDirectory) {
   [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
 } else { [System.Security.AccessControl.InheritanceFlags]::None }
@@ -44,13 +49,14 @@ $owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
 const broadenScript = `
 $ErrorActionPreference = "Stop"
 $target = [Environment]::GetEnvironmentVariable("FRICTION_TEST_ACL_PATH")
-$acl = Get-Acl -LiteralPath $target
+$sections = [Security.AccessControl.AccessControlSections]::Access -bor [Security.AccessControl.AccessControlSections]::Owner
+$acl = [IO.Directory]::GetAccessControl($target, $sections)
 $identity = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-32-545")
 $rights = [System.Security.AccessControl.FileSystemRights]::FullControl
 $inheritance = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
 $rule = New-Object System.Security.AccessControl.FileSystemAccessRule -ArgumentList @($identity, $rights, $inheritance, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow)
 $acl.AddAccessRule($rule)
-Set-Acl -LiteralPath $target -AclObject $acl
+[IO.Directory]::SetAccessControl($target, $acl)
 "ok" | ConvertTo-Json -Compress
 `;
 

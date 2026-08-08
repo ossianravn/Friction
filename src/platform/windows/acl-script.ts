@@ -27,7 +27,7 @@ function Add-PrivateRule($security, $identity, $inheritance) {
 }
 
 if ($action -eq 'secure-directory') {
-  if (-not (Test-Path -LiteralPath $target -PathType Container)) {
+  if (-not [IO.Directory]::Exists($target)) {
     throw 'wrong-kind'
   }
 
@@ -38,7 +38,7 @@ if ($action -eq 'secure-directory') {
     [Security.AccessControl.InheritanceFlags]::ObjectInherit
   Add-PrivateRule $security $current $inheritance
   Add-PrivateRule $security $system $inheritance
-  Set-Acl -LiteralPath $target -AclObject $security
+  [IO.Directory]::SetAccessControl($target, $security)
   $action = 'verify-directory'
 }
 
@@ -49,15 +49,21 @@ if (-not $directory -and -not $file) {
   throw 'invalid-action'
 }
 
-if ($directory -and -not (Test-Path -LiteralPath $target -PathType Container)) {
+if ($directory -and -not [IO.Directory]::Exists($target)) {
   throw 'wrong-kind'
 }
 
-if ($file -and -not (Test-Path -LiteralPath $target -PathType Leaf)) {
+if ($file -and -not [IO.File]::Exists($target)) {
   throw 'wrong-kind'
 }
 
-$acl = Get-Acl -LiteralPath $target
+$sections = [Security.AccessControl.AccessControlSections]::Access -bor
+  [Security.AccessControl.AccessControlSections]::Owner
+$acl = if ($directory) {
+  [IO.Directory]::GetAccessControl($target, $sections)
+} else {
+  [IO.File]::GetAccessControl($target, $sections)
+}
 $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier])
 $ownerMatches = $owner.Value -eq $current.Value
 $inheritanceProtected = $acl.AreAccessRulesProtected
