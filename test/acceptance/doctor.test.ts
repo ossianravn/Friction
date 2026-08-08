@@ -3,6 +3,7 @@ import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
+import { securePrivateStoreFile } from "../../src/storage/private-store.js";
 import {
   addObservation,
   envelope,
@@ -29,6 +30,9 @@ test("missing storage is empty and doctor reports corrupt files without body con
     `{"body":"${corruptCanary}"`,
     { encoding: "utf8", mode: 0o600 },
   );
+  await securePrivateStoreFile(
+    path.join(context.home, "v1", "events", "corrupt.json"),
+  );
   const overlongCanary = "doctor-overlong-canary";
   const overlongEventId = `evt_${"a".repeat(32)}`;
   await writeFile(
@@ -49,6 +53,9 @@ test("missing storage is empty and doctor reports corrupt files without body con
       clientVersion: "test",
     })}\n`,
     { encoding: "utf8", mode: 0o600 },
+  );
+  await securePrivateStoreFile(
+    path.join(context.home, "v1", "events", `${overlongEventId}.json`),
   );
 
   const list = await runFriction({
