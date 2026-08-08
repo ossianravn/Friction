@@ -11,7 +11,7 @@ import { resolveRuntimePlatform } from "../runtime-platform.js";
 import { assertSafeWindowsPrivateHome } from "./path-policy.js";
 
 const MAXIMUM_OUTPUT_BYTES = 16 * 1_024;
-const TIMEOUT_MILLISECONDS = 5_000;
+const TIMEOUT_MILLISECONDS = 15_000;
 
 function executablePath(environment: NodeJS.ProcessEnv = process.env): string {
   const systemRoot = getEnvironmentValue("SystemRoot", environment, "win32");

@@ -34,8 +34,18 @@ async function treeBytes(root: string): Promise<Record<string, string>> {
 
 test("setup previews without writes and supports safe apply, repeat, undo, and conflicts", async () => {
   const context = await makeAcceptanceFixture("friction-setup-");
-  const userHome = path.join(context.root, "user");
-  const codexHome = path.join(context.root, "custom-codex-home");
+  let setupRoot = context.root;
+
+  if (process.platform !== "win32") {
+    const canonicalRoot = path.join(context.root, "canonical-setup-root");
+    const linkedRoot = path.join(context.root, "linked-setup-root");
+    await mkdir(canonicalRoot);
+    await symlink(canonicalRoot, linkedRoot, "dir");
+    setupRoot = linkedRoot;
+  }
+
+  const userHome = path.join(setupRoot, "user");
+  const codexHome = path.join(setupRoot, "custom-codex-home");
   const agentsFile = path.join(codexHome, "AGENTS.md");
   const environment = {
     HOME: userHome,

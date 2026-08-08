@@ -36,9 +36,38 @@ export async function canonicalizeSetupRoot(requestedRoot: string): Promise<stri
     : path.resolve(requestedRoot);
   const parsed = path.parse(absolute);
 
-  if (platform === "win32") {
-    await inspectWindowsPathComponents(parsed.root, absolute, "directory-or-missing");
+  if (platform !== "win32") {
+    const missingComponents: string[] = [];
+    let ancestor = absolute;
+
+    while (true) {
+      try {
+        const canonicalAncestor = await realpath(ancestor);
+        const status = await lstat(canonicalAncestor);
+
+        if (!status.isDirectory()) {
+          throw new FrictionFailure("setup_conflict");
+        }
+
+        return path.join(canonicalAncestor, ...missingComponents.reverse());
+      } catch (error) {
+        if (!isMissing(error)) {
+          throw error;
+        }
+
+        const parent = path.dirname(ancestor);
+
+        if (parent === ancestor) {
+          throw new FrictionFailure("setup_conflict");
+        }
+
+        missingComponents.push(path.basename(ancestor));
+        ancestor = parent;
+      }
+    }
   }
+
+  await inspectWindowsPathComponents(parsed.root, absolute, "directory-or-missing");
 
   const components = absolute.slice(parsed.root.length).split(path.sep).filter(Boolean);
   let current = parsed.root;
