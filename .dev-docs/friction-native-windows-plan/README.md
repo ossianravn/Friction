@@ -1,6 +1,6 @@
 # Friction native Windows support plan
 
-**Status:** implementation in progress; W7 native CI active
+**Status:** W8 complete; native Windows 11 x64 support validated
 
 **Audience:** Codex implementing native Windows support in the existing TypeScript repository
 
@@ -21,14 +21,14 @@ not completion.
 | W4 — CLI and Git | Complete | Native packaged `friction.cmd` passed version, Unicode add/list, and doctor; Git for Windows passed all three discovery states. |
 | W5 — harness setup | Complete | Native Codex PowerShell and Claude Git Bash apply/reapply/undo fixtures passed with CRLF, precedence, and junction gates. |
 | W6 — public contract | Complete | Help, schema, doctor, README, assets, and current PRDs expose the under-validation Windows contract. |
-| W7 — mandatory native CI | In progress | Local Windows 11/Node 24 passed 15/15 checks plus packaged `.cmd`, PowerShell 5.1/7, Git Bash, Unicode, and doctor smoke; Linux check/package smoke pass. Clean hosted macOS and `windows-2025` lanes remain. |
-| W8 — Windows 11 dogfood | Pending | Required before making the native support claim. |
+| W7 — mandatory native CI | Complete | Hosted run [`31254855247`](https://github.com/ossianravn/Friction/actions/runs/31254855247) passed on commit `e7d2058`: Ubuntu in 32s, macOS in 22s, and `windows-2025` in 25m38s. Every lane passed `npm ci`, `npm run check`, and `npm run pack:smoke`. |
+| W8 — Windows 11 dogfood | Complete | Pack/install, PowerShell 5.1/7, Git Bash, native Codex and authenticated native Claude Code, two-repository and detached-HEAD reads, lifecycle, review, export, publish, purge, doctor, ACL inspection, setup lifecycle, logout, and isolated-profile cleanup passed on Windows 11 x64. |
 
-**Current gate:** clean `ubuntu-latest`, `macos-latest`, and pinned `windows-2025`
-lanes must pass Node 24 check/package smoke; Windows must additionally prove ACL,
-junction, npm `.cmd`, PowerShell 5.1/7, and Git Bash capture with isolated homes.
-The matrix and acceptance commands are implemented; the hosted run requires the
-current changes to be committed and pushed.
+**Current gate:** W8 is complete. Clean `ubuntu-latest`, `macos-latest`, and pinned
+`windows-2025` lanes passed the Node 24 check/package smoke matrix on commit
+`e7d2058`. Windows 11 x64 dogfood then passed in native Codex and authenticated native
+Claude Code through Git Bash. No high-severity Windows finding remains, so the narrow
+Windows 11 x64/local-NTFS support claim is now enabled.
 
 **Latest review-fix evidence:** POSIX export now canonicalizes the nearest existing
 parent before safe component inspection, including the macOS `/var` symlink shape.

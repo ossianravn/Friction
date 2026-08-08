@@ -24,14 +24,15 @@ one or more repositories.
 |---|---|---|
 | macOS | Supported | Node.js 24. |
 | Linux | Supported | Node.js 24. |
-| Windows 11 x64 | Under validation | Native Node.js 24; Git for Windows for repository-aware behavior. |
-| Windows Server 2025 x64 | CI target | The mandatory hosted-runner gate is not complete yet. |
+| Windows 11 x64 | Supported | Native Node.js 24; Git for Windows for repository-aware behavior and Claude Code. |
+| Windows Server 2025 x64 | CI target | The mandatory pinned hosted-runner matrix is green. |
 | WSL | Supported through Linux behavior | Prefer the Linux filesystem for the project and private store. |
 | Windows ARM64 | Not yet claimed | Requires its own complete native acceptance pass. |
 
-The native Windows implementation now passes its private ACL, local-NTFS, npm command
-shim, Git for Windows, and isolated Codex/Claude setup gates. The remaining CI and
-end-to-end Windows 11 dogfood gates must pass before this README calls it supported.
+The native Windows 11 x64 baseline has passed its private ACL, local-NTFS, npm command
+shim, Git for Windows, isolated setup lifecycle, native Codex and Claude Code dogfood,
+and the pinned Windows Server 2025 CI matrix. Windows ARM64 and private UNC storage
+remain outside the supported baseline.
 
 ## The workflow in plain language
 
@@ -342,8 +343,8 @@ against ordinary cross-account access, not an administrator who can take ownersh
 
 This is an unpublished proof of concept, not a polished public release.
 
-- Native Windows 11 x64 remains under validation until its mandatory CI and dogfood
-  gates pass; Windows ARM64 and private UNC storage are not claimed.
+- Native Windows support is limited to Windows 11 x64 on local NTFS; Windows ARM64
+  and private UNC storage are not claimed.
 - It requires Node.js 24 or newer.
 - It is designed for one developer and local storage; there are no teams or sync.
 - It does not automatically understand or cluster observations. Review reasoning comes
