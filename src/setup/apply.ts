@@ -12,6 +12,7 @@ import { redact } from "../security/redact.js";
 import { resolveFrictionPaths } from "../storage/paths.js";
 import {
   ensureSetupLockStore,
+  securePrivateStoreFile,
   verifyPrivateStoreFile,
 } from "../storage/private-store.js";
 import {
@@ -56,6 +57,7 @@ async function acquireLock(plan: SetupPlan): Promise<{
       const handle = await open(lockPath, "wx", 0o600);
 
       try {
+        await securePrivateStoreFile(lockPath);
         await verifyPrivateStoreFile(lockPath);
       } catch (error) {
         await handle.close().catch(() => undefined);

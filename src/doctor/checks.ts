@@ -12,7 +12,10 @@ import { buildSetupPlan } from "../setup/plan.js";
 import type { SetupHarness } from "../setup/types.js";
 import { loadEvents } from "../storage/load-events.js";
 import { resolveFrictionPaths } from "../storage/paths.js";
-import { verifyPrivateStoreFile } from "../storage/private-store.js";
+import {
+  securePrivateStoreFile,
+  verifyPrivateStoreFile,
+} from "../storage/private-store.js";
 import { CLI_VERSION } from "../version.js";
 import { windowsPrivateStoreChecks } from "./windows-checks.js";
 
@@ -61,6 +64,7 @@ async function probeTemporaryDirectory(directory: string): Promise<DoctorCheck> 
 
   try {
     handle = await open(probe, "wx", 0o600);
+    await securePrivateStoreFile(probe);
     await verifyPrivateStoreFile(probe);
     await handle.close();
     handle = undefined;

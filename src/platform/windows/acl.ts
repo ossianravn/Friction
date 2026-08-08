@@ -47,7 +47,7 @@ function isResult(value: unknown): value is WindowsAclResult {
 }
 
 async function runAcl(
-  action: "secure-directory" | "verify-directory" | "verify-file",
+  action: "secure-directory" | "secure-file" | "verify-directory" | "verify-file",
   target: string,
 ): Promise<WindowsAclResult> {
   const safeTarget = assertSafeWindowsPrivateHome(target);
@@ -88,6 +88,16 @@ export function verifyPrivateDirectory(target: string): Promise<WindowsAclResult
 
 export function verifyPrivateFile(target: string): Promise<WindowsAclResult> {
   return runAcl("verify-file", target);
+}
+
+export async function securePrivateFile(target: string): Promise<WindowsAclResult> {
+  const result = await runAcl("secure-file", target);
+
+  if (!result.ok) {
+    throw new FrictionFailure("safety_failure");
+  }
+
+  return result;
 }
 
 export async function windowsAclBridgeAvailable(): Promise<boolean> {

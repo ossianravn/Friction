@@ -9,6 +9,7 @@ import {
 import { resolveRuntimePlatform } from "../platform/runtime-platform.js";
 import {
   securePrivateDirectory,
+  securePrivateFile,
   verifyPrivateDirectory,
   verifyPrivateFile,
   type WindowsAclResult,
@@ -241,5 +242,16 @@ export async function verifyPrivateStoreFile(filePath: string): Promise<void> {
       "file",
     );
     requireSafeAcl(await verifyPrivateFile(filePath));
+  }
+}
+
+export async function securePrivateStoreFile(filePath: string): Promise<void> {
+  if (resolveRuntimePlatform() === "win32") {
+    await inspectWindowsPathComponents(
+      path.win32.parse(filePath).root,
+      filePath,
+      "file",
+    );
+    requireSafeAcl(await securePrivateFile(filePath));
   }
 }

@@ -42,6 +42,20 @@ if ($action -eq 'secure-directory') {
   $action = 'verify-directory'
 }
 
+if ($action -eq 'secure-file') {
+  if (-not [IO.File]::Exists($target)) {
+    throw 'wrong-kind'
+  }
+
+  $security = [Security.AccessControl.FileSecurity]::new()
+  $security.SetOwner($current)
+  $security.SetAccessRuleProtection($true, $false)
+  Add-PrivateRule $security $current ([Security.AccessControl.InheritanceFlags]::None)
+  Add-PrivateRule $security $system ([Security.AccessControl.InheritanceFlags]::None)
+  [IO.File]::SetAccessControl($target, $security)
+  $action = 'verify-file'
+}
+
 $directory = $action -eq 'verify-directory'
 $file = $action -eq 'verify-file'
 

@@ -6,7 +6,11 @@ import { FrictionFailure } from "../domain/failures.js";
 import { installPrivateFileExclusively } from "../platform/fs.js";
 import { createEventId } from "../platform/ids.js";
 import type { FrictionPaths } from "./paths.js";
-import { ensureEventStore, verifyPrivateStoreFile } from "./private-store.js";
+import {
+  ensureEventStore,
+  securePrivateStoreFile,
+  verifyPrivateStoreFile,
+} from "./private-store.js";
 
 function serialize(event: FrictionEvent): Uint8Array {
   if (!isFrictionEvent(event)) {
@@ -33,7 +37,7 @@ export async function writeEvent(
         finalPath,
         serialize(candidate),
         {
-          temporaryCreated: verifyPrivateStoreFile,
+          temporaryCreated: securePrivateStoreFile,
           installed: verifyPrivateStoreFile,
         },
       );
