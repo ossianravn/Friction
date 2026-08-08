@@ -85,8 +85,10 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
   assert.equal(applied.code, 0);
   assert.equal(envelope(applied).warnings[0]?.["code"], "path_unavailable");
   const installed = await readFile(agentsFile);
+  const managedMarker = Buffer.from("<!-- friction:managed:start v1 -->");
   assert.equal(installed.includes(Buffer.from("friction add --stdin --source codex")), true);
-  assert.equal(installed.subarray(installed.length - original.length).equals(original), true);
+  assert.equal(installed.subarray(0, original.length).equals(original), true);
+  assert.equal(installed.indexOf(managedMarker) > original.length, true);
   if (process.platform === "win32") {
     const installedText = installed.toString("utf8");
     assert.equal(installedText.includes("$OutputEncoding = $utf8NoBom"), true);
@@ -100,6 +102,22 @@ test("setup previews without writes and supports safe apply, repeat, undo, and c
   if (process.platform !== "win32") {
     assert.equal((await stat(reviewSkill)).mode & 0o777, 0o600);
   }
+
+  const markerOffset = installed.indexOf(managedMarker);
+  await writeFile(
+    agentsFile,
+    Buffer.concat([installed.subarray(markerOffset), original]),
+  );
+  const migrated = envelope(
+    await runFriction({
+      arguments: ["setup", "codex", "--apply", "--json"],
+      cwd: context.work,
+      home: context.home,
+      environment,
+    }),
+  );
+  assert.equal(migrated.data["state"], "update");
+  assert.equal((await readFile(agentsFile)).equals(installed), true);
 
   const installedUserTree = await treeBytes(userHome);
   const installedCodexTree = await treeBytes(codexHome);

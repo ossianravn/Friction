@@ -139,7 +139,8 @@ User scope:
 
 - resolve `CODEX_HOME`, default `~/.codex`;
 - target non-empty `AGENTS.override.md` when active, otherwise `AGENTS.md`;
-- install one versioned uniquely marked block;
+- append one versioned uniquely marked block after unrelated existing instructions;
+- relocate a recognized legacy Friction block to that position on reapply;
 - user skills target `$HOME/.agents/skills/friction-review/` and
   `$HOME/.agents/skills/friction-fix/`.
 
