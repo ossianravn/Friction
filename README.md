@@ -15,8 +15,9 @@ likely causes against the current code, and recommend what is worth fixing first
 Nothing is reviewed, changed, or shared in the background. You decide when review happens,
 which fix is allowed, and whether any record should be added to a repository.
 
-Friction is currently an unpublished proof of concept for one developer working across
-one or more repositories.
+Friction is an early public release for one developer working across one or more
+repositories. Its local-first privacy and explicit-control boundaries remain the core
+product contract while real-world dogfood continues.
 
 ## Platform status
 
@@ -58,35 +59,29 @@ for when you need more control.
 You need:
 
 - Node.js 24 or newer;
-- npm; and
+- npm or pnpm; and
 - Codex or Claude Code.
 
-Friction is not published to npm yet. On macOS, Linux, WSL, or Git Bash, build and
-install it from this repository with:
+Install Friction globally with npm:
 
 ```sh
-git clone https://github.com/ossianravn/Friction.git
-cd Friction
-npm ci
-npm run build
-npm pack
-npm install --global ./friction-0.0.0.tgz
+npm install --global @ossianravn/friction
 friction --version
 ```
 
-In native Windows PowerShell, use:
+Or install the same package globally with pnpm:
 
-```powershell
-git clone https://github.com/ossianravn/Friction.git
-Set-Location Friction
-npm ci
-npm run build
-npm pack
-npm install --global .\friction-0.0.0.tgz
+```sh
+pnpm add --global @ossianravn/friction
 friction --version
 ```
 
-If you already have this repository, start with `npm ci`.
+For a one-off inspection without a persistent install, use:
+
+```sh
+npx --yes @ossianravn/friction --version
+pnpm dlx @ossianravn/friction --version
+```
 
 The global install matters because your coding agent needs a stable `friction` command on
 `PATH`. Friction setup never installs the command for you.
@@ -363,7 +358,8 @@ against ordinary cross-account access, not an administrator who can take ownersh
 
 ## Current limitations
 
-This is an unpublished proof of concept, not a polished public release.
+This is an early `0.x` release. The command and stored-event contracts may still evolve
+from dogfood evidence before a stable `1.0` release.
 
 - Native Windows support is limited to Windows 11 x64 on local NTFS; Windows ARM64
   and private UNC storage are not claimed.
@@ -382,6 +378,7 @@ Use these commands when changing Friction itself:
 npm ci
 npm run check
 npm run pack:smoke
+npm run release:check
 ```
 
 `npm run check` enforces the 300-line limit for code files, runs strict TypeScript
@@ -390,3 +387,10 @@ checks, executes the focused test suite, and builds the command-line program.
 `npm run pack:smoke` creates a package in a temporary directory, installs it there, checks
 the packaged instructions and skills, and verifies that capture and reading work across
 separate processes without touching your normal Friction data.
+
+`npm run release:check` runs the full check and packaged smoke together. The repository
+uses npm for development and CI; pnpm is supported as a package runner and installer.
+
+## License
+
+Friction is available under the [MIT License](./LICENSE).

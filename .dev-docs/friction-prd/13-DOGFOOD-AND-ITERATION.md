@@ -78,6 +78,17 @@ Treat these as hypotheses, not permanent metrics:
 - Published JSONL conflicts in real collaboration: study merge strategy before adding
   a server or lock protocol.
 
+## Approved distribution decision
+
+The owner approved a first public npm release as `@ossianravn/friction@0.1.0` under
+MIT after the package, macOS/Linux, and native-Windows gates passed. npm remains the
+development package manager. pnpm is a verified consumption target, not a repository
+toolchain migration. The exact preparation and publication gate live in
+`.dev-docs/friction-npm-release/README.md`.
+
+This decision does not authorize teams, cloud behavior, automatic updates, native
+installers, or other deferred distribution work.
+
 ## Features deferred until evidence
 
 ### Team phase
@@ -109,12 +120,10 @@ Treat these as hypotheses, not permanent metrics:
 
 ### Distribution and platform
 
-- public npm publication;
-- scoped package name selection;
 - Homebrew or standalone native binary;
 - automatic updater;
 - Windows ARM64, private UNC storage, or native installer support;
-- signed releases and release automation.
+- signed releases and non-npm release automation.
 
 ## Principles for iteration
 
