@@ -6,20 +6,21 @@ The repository must produce a normal npm package with a `friction` binary. That
 package shape permits execution through npm, Yarn, pnpm, Bun, or a persistent global
 install without harness-specific runtime code.
 
-Expected future forms after publication:
+Supported package-runner forms after publication:
 
 ```text
-npx <package> setup codex
-npm exec --package <package> -- friction setup codex
-yarn dlx <package> setup codex
-pnpm dlx <package> setup codex
-bunx <package> setup codex
+npx @ossianravn/friction setup codex
+npm exec --package @ossianravn/friction -- friction setup codex
+yarn dlx @ossianravn/friction setup codex
+pnpm dlx @ossianravn/friction setup codex
+bunx @ossianravn/friction setup codex
 ```
 
-The PoC remains `private: true` and must not publish. Verify the package contract with
-a local tarball. Where Yarn, pnpm, or Bun are installed, run a best-effort local
-package-runner smoke and report unverified runners honestly. Do not add those package
-managers as dependencies.
+The approved public package is `@ossianravn/friction`, while its executable remains
+`friction`. Verify the package contract with a local tarball before every release.
+Where Yarn, pnpm, or Bun are installed, run a best-effort local package-runner smoke
+and report unverified runners honestly. Do not add those package managers as
+dependencies or replace npm as the development package manager.
 
 Package runners are for try/setup/install. Ambient capture should invoke a persistent
 plain `friction` binary on `PATH`; do not make every observation download or resolve a

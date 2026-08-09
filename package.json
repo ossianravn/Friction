@@ -1,7 +1,24 @@
 {
-  "name": "friction",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@ossianravn/friction",
+  "version": "0.1.0",
+  "description": "A local-first feedback loop for recurring coding-agent friction.",
+  "keywords": [
+    "codex",
+    "claude-code",
+    "coding-agents",
+    "developer-tools",
+    "local-first"
+  ],
+  "homepage": "https://github.com/ossianravn/Friction#readme",
+  "bugs": {
+    "url": "https://github.com/ossianravn/Friction/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ossianravn/Friction.git"
+  },
+  "license": "MIT",
+  "author": "Ossian Ravn <hello@ossianravn.dev>",
   "type": "module",
   "bin": {
     "friction": "dist/bin/friction.js"
@@ -10,8 +27,13 @@
     "dist/",
     "assets/",
     "skills/",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "engines": {
     "node": ">=24"
   },
@@ -21,7 +43,9 @@
     "test": "node --import tsx --test test/**/*.test.ts",
     "check:lines": "node scripts/check-code-lines.mjs",
     "check": "npm run check:lines && npm run typecheck && npm test && npm run build",
-    "pack:smoke": "node scripts/pack-smoke.mjs"
+    "pack:smoke": "node scripts/pack-smoke.mjs",
+    "release:check": "npm run check && npm run pack:smoke",
+    "prepublishOnly": "npm run release:check"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

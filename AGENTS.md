@@ -29,7 +29,9 @@ agents. Keep these decisions fixed during the PoC:
   misleading abstractions, hidden invariants, duplicated knowledge, stale docs and
   guides, scripts, tests, dependencies, configuration, environment, tools, and
   harnesses—not only command failures.
-- Teams, cloud services, background analysis, and public release work are deferred.
+- Teams, cloud services, background analysis, and non-npm distribution remain deferred.
+- Public npm release preparation is approved for `@ossianravn/friction`; the first
+  registry publish remains a separate explicit approval gate.
 - The primary coding task always outranks friction capture.
 
 ## Execution order
@@ -60,7 +62,7 @@ Do not scaffold the full planned tree or build future-milestone abstractions ear
 
 ## Technical constraints
 
-- Node.js 24 LTS, npm, ESM, strict TypeScript, one private unpublished package.
+- Node.js 24 LTS, npm, ESM, strict TypeScript, one public npm CLI package.
 - Use `node:util.parseArgs`, `node:test` with `tsx`, and `tsc`.
 - Authorized dev dependencies: `typescript`, `tsx`, and `@types/node`.
 - Runtime dependencies remain zero. Stop and report before adding one.
@@ -181,12 +183,15 @@ Verification order:
 
 Do not add teams, accounts, sync, cloud storage, telemetry, dashboards, daemons,
 watchers, hooks, transcript ingestion, MCP, IDE extensions, automatic clustering,
-embeddings, model clients, autonomous fixes, release machinery, marketing assets, or
+embeddings, model clients, autonomous fixes, autonomous release machinery, marketing assets, or
 speculative migrations/high-scale work during the PoC.
 
 Do not commit, merge, push, force-push, publish, deploy, reserve a package name, alter
 live configuration, call paid/live services, or perform destructive Git/data actions
 without explicit authorization. Do not repair or reformat unrelated code.
+
+Release-preparation authorization does not authorize the first npm registry publish.
+Stop at the verified pre-publish gate and request final confirmation.
 
 Stop and report when a production dependency appears necessary; official harness
 behavior contradicts the setup contract; a safe atomic primitive is unavailable;

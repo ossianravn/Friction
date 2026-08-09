@@ -20,7 +20,7 @@ not completion.
 | W3 — Windows filesystem safety | Complete | Native NTFS junction, capability, safe-read, and changed-preimage gates pass. |
 | W4 — CLI and Git | Complete | Native packaged `friction.cmd` passed version, Unicode add/list, and doctor; Git for Windows passed all three discovery states. |
 | W5 — harness setup | Complete | Native Codex PowerShell and Claude Git Bash apply/reapply/undo fixtures passed with CRLF, precedence, and junction gates. |
-| W6 — public contract | Complete | Help, schema, doctor, README, assets, and current PRDs expose the under-validation Windows contract. |
+| W6 — public contract | Complete | Help, schema, doctor, README, assets, and current PRDs expose the validated Windows 11 x64 baseline without claiming ARM64 or private UNC storage. |
 | W7 — mandatory native CI | Complete | Hosted run [`31254855247`](https://github.com/ossianravn/Friction/actions/runs/31254855247) passed on commit `e7d2058`: Ubuntu in 32s, macOS in 22s, and `windows-2025` in 25m38s. Every lane passed `npm ci`, `npm run check`, and `npm run pack:smoke`. |
 | W8 — Windows 11 dogfood | Complete | Pack/install, PowerShell 5.1/7, Git Bash, native Codex and authenticated native Claude Code, two-repository and detached-HEAD reads, lifecycle, review, export, publish, purge, doctor, ACL inspection, setup lifecycle, logout, and isolated-profile cleanup passed on Windows 11 x64. |
 

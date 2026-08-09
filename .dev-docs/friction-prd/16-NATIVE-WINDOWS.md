@@ -1,6 +1,6 @@
 # Native Windows current-scope addendum
 
-Status: implementation authorized; native support remains under validation
+Status: native Windows 11 x64 support validated
 
 ## Scope change
 
@@ -37,8 +37,8 @@ The first intended native claim is limited to:
 - native Claude Code through its documented Git Bash path.
 
 Windows ARM64, Windows 10, canonical private UNC storage, non-NTFS private storage,
-native installers, package-manager distribution, and automatic PATH changes remain
-unclaimed.
+native installers, and automatic PATH changes remain unclaimed. npm distribution uses
+the validated package and Windows command-shim path.
 
 ## Unchanged product invariants
 
@@ -51,7 +51,7 @@ unclaimed.
 - The one-file-per-event format, strict TypeScript, Node 24, npm, and 300-line code
   limit remain fixed.
 - Teams, cloud sync, telemetry, hooks, transcript mining, MCP, daemons, native addons,
-  automatic fixes, and release machinery remain out of scope.
+  automatic fixes, and non-npm release machinery remain out of scope.
 
 ## Windows privacy and filesystem contract
 
@@ -80,5 +80,6 @@ The final support claim requires:
 4. a Windows 11 x64 dogfood pass in native Codex and Claude Code;
 5. no unresolved high-severity native Windows finding.
 
-Do not publish, release, or make an unconditional native-Windows support statement
-without separate authorization after those gates pass.
+Those gates passed in the W7 hosted matrix and W8 Windows 11 dogfood. The separate npm
+decision authorizes release preparation and the Windows 11 x64 support statement; the
+first registry publish remains a final explicit approval gate.

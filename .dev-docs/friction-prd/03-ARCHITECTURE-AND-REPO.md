@@ -45,9 +45,12 @@ explicit IDs or --all-open
 - npm as the development package manager.
 - ESM through `"type": "module"`.
 - strict TypeScript.
-- Initial `package.json` name: `friction`.
-- Initial version: `0.0.0`.
-- Set `private: true`; do not publish or add a license during implementation.
+- The implementation package began as private `friction@0.0.0` with no license.
+- The approved public distribution target is `@ossianravn/friction@0.1.0` under MIT.
+- npm remains the development package manager; other package managers are consumption
+  compatibility targets, not repository toolchain replacements.
+- A release-preparation request may remove `private: true`, but the first registry
+  publish remains an explicit final approval gate.
 - Expose a package binary named `friction` at `dist/bin/friction.js`.
 - Add a Node engine requirement of `>=24`.
 - Use `node:util.parseArgs`; do not add a CLI framework.

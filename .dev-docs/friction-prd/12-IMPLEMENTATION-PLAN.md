@@ -185,6 +185,31 @@ Complete:
 Do not publish, create a release, reserve a package name, deploy anything, or enable
 telemetry.
 
+## Milestone 7 — public npm release readiness
+
+This milestone is separately authorized after the PoC and native-Windows gates passed.
+
+Complete:
+
+1. Rename the package to `@ossianravn/friction` while preserving the `friction` binary.
+2. Set the first public version to `0.1.0` and keep CLI/package versions synchronized.
+3. Add the approved MIT license and complete public npm metadata.
+4. Replace source-tarball installation guidance with npm and pnpm consumption guidance.
+5. Add a manual GitHub Actions trusted-publishing workflow with no long-lived token.
+6. Verify npm install/exec and pnpm global/dlx behavior from the exact local tarball.
+7. Run `npm run release:check` and inspect the complete packed file list.
+8. Record exact evidence in `.dev-docs/friction-npm-release/README.md`.
+
+Acceptance:
+
+- no runtime dependency or repository package-manager migration is introduced;
+- `npm publish --dry-run` targets the public scoped package and includes only intended
+  files;
+- npm and available pnpm runners execute the packaged `friction` binary;
+- the existing cross-platform CI contract remains unchanged;
+- the first registry publish, commit, push, and trusted-publisher configuration remain
+  undone until separately authorized.
+
 ## Stop conditions
 
 Stop and report before proceeding when:

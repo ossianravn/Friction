@@ -1,86 +1,23 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { access, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import {
+  childEnvironment,
+  createProcessRunner,
+} from "./package-smoke-process.mjs";
+
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
-
-async function run(command, arguments_, options = {}) {
-  return new Promise((resolve, reject) => {
-    const hasInput = options.input !== undefined;
-    const child = spawn(command, arguments_, {
-      cwd: options.cwd ?? repositoryRoot,
-      env: options.env ?? process.env,
-      stdio: [hasInput ? "pipe" : "ignore", "pipe", "pipe"],
-      windowsHide: process.platform === "win32",
-    });
-    const stdout = [];
-    const stderr = [];
-    let settled = false;
-    const fail = (error) => {
-      if (!settled) {
-        settled = true;
-        reject(error);
-      }
-    };
-    child.stdout.on("data", (chunk) => stdout.push(chunk));
-    child.stderr.on("data", (chunk) => stderr.push(chunk));
-    child.on("error", fail);
-    child.on("close", (code) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      const result = {
-        stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8"),
-      };
-
-      if (code === 0) {
-        resolve(result);
-      } else {
-        reject(new Error(`${command} exited ${code}: ${result.stderr}`));
-      }
-    });
-
-    if (hasInput) {
-      child.stdin.on("error", (error) => {
-        if (error.code !== "EPIPE") {
-          fail(error);
-        }
-      });
-      child.stdin.end(options.input);
-    }
-  });
-}
-
-function childEnvironment(overrides) {
-  const entries = new Map();
-
-  for (const [name, value] of Object.entries({ ...process.env, ...overrides })) {
-    if (value !== undefined) {
-      entries.set(process.platform === "win32" ? name.toLowerCase() : name, {
-        name,
-        value,
-      });
-    }
-  }
-
-  return Object.fromEntries([...entries.values()].map(({ name, value }) => [name, value]));
-}
-
-function runNpm(arguments_, options = {}) {
-  const npmEntry = process.env.npm_execpath;
-
-  if (npmEntry === undefined || npmEntry.length === 0) {
-    throw new Error("Package smoke requires npm's executable entry point.");
-  }
-
-  return run(process.execPath, [npmEntry, ...arguments_], options);
-}
+const { run, runNpm } = createProcessRunner(repositoryRoot);
+const packageManifest = JSON.parse(
+  await readFile(new URL("../package.json", import.meta.url), "utf8"),
+);
+assert.equal(typeof packageManifest.name, "string");
+assert.equal(typeof packageManifest.version, "string");
+const packageName = packageManifest.name;
+const packageVersion = packageManifest.version;
 
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), "friction-pack-smoke-"));
 
@@ -96,6 +33,7 @@ try {
   await mkdir(workingDirectory);
   const npmEnvironment = childEnvironment({
     npm_config_cache: path.join(temporaryRoot, "npm-cache"),
+    npm_config_dry_run: "false",
   });
 
   await runNpm(["run", "build"], { env: npmEnvironment });
@@ -110,7 +48,11 @@ try {
     { cwd: installDirectory, env: npmEnvironment },
   );
 
-  const packageRoot = path.join(installDirectory, "node_modules", "friction");
+  const packageRoot = path.join(
+    installDirectory,
+    "node_modules",
+    ...packageName.split("/"),
+  );
   const binaryDirectory = path.join(installDirectory, "node_modules", ".bin");
   const binary = path.join(binaryDirectory, "friction");
   await access(path.join(packageRoot, "assets", "instructions", "capture-shared.md"));
@@ -207,7 +149,7 @@ try {
     expectedBodies.push(gitBashBody);
   }
   const version = await runInstalled(["--version"], { cwd: workingDirectory });
-  assert.equal(version.stdout.trim(), "0.0.0");
+  assert.equal(version.stdout.trim(), packageVersion);
   const help = await runInstalled(["--help"], { cwd: workingDirectory });
   assert.match(help.stdout, /add\s+Record one screened observation/);
   const setupHelp = await runInstalled(["setup", "--help"], { cwd: workingDirectory });
