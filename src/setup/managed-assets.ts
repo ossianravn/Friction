@@ -2,6 +2,7 @@ import { FrictionFailure } from "../domain/failures.js";
 
 const managedAssetDigests: Readonly<Record<string, readonly string[]>> = {
   "claude-rule": [
+    "632a3ae057c6f2b2c2e0e99b5449b9330b6620f96aeaed02c4ffd1898564f819",
     "923bb1c3e036a86990b7315a85d900e037a306017e1d43a842207a28001ba121",
     "3ca9a1ac9010677216867f37c5f8d2297cfb7a1ee2ee378137c9f715ba2b5595",
     "da7b11204a2a5c75fe3342e982a00b3d41e2e3305ac9df80c23a0b5f7ba4043c",
