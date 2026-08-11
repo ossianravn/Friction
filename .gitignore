@@ -2,3 +2,11 @@ node_modules/
 dist/
 coverage/
 *.tgz
+
+# Local development and agent process artifacts
+.dev-docs/
+.agents/
+.codex/
+.claude/
+AGENTS.md
+CLAUDE.md
