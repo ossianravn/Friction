@@ -1,5 +1,6 @@
 import type { ObservationRecord } from "../domain/events.js";
 import {
+  contentWidth,
   formatTimestamp,
   renderDivider,
   styleText,
@@ -8,6 +9,7 @@ import {
 } from "./presentation.js";
 import type { ScopeDisplay } from "./query.js";
 import { toPublicRecord, type PublicObservationRecord } from "./public-record.js";
+import { wrapText } from "./text-layout.js";
 
 export type ListData = {
   scope: ScopeDisplay;
@@ -43,16 +45,55 @@ function countLabel(data: ListData): string {
   return `${data.count} ${data.count === 1 ? "observation" : "observations"}`;
 }
 
-function detailLine(
-  options: HumanRenderOptions,
-  label: string,
-  value: string,
-): string {
-  return `${styleText(options, "muted", label.padEnd(12))}${value}`;
+function summaryLabel(data: ListData): string {
+  return `${countLabel(data)} · ${scopeLabel(data.scope)}`;
 }
 
 function statusTone(status: PublicObservationRecord["status"]): TextTone {
   return status === "open" ? "warning" : "success";
+}
+
+function renderMetadata(
+  record: PublicObservationRecord,
+  options: HumanRenderOptions,
+): string | null {
+  const fields: string[] = [];
+
+  if (record.repository !== null) {
+    fields.push(`repo ${record.repository.name}:${record.repository.cwdRelative}`);
+    if (record.repository.branch !== null) {
+      fields.push(`branch ${record.repository.branch}`);
+    }
+  }
+
+  if (record.area !== null) {
+    fields.push(`area ${record.area}`);
+  }
+
+  if (record.impacts.length > 0) {
+    fields.push(`impact ${record.impacts.join(", ")}`);
+  }
+
+  if (fields.length === 0) {
+    return null;
+  }
+
+  const prefix = "  ";
+  const width = Math.max(1, contentWidth(options) - prefix.length);
+  return wrapText(fields.join(" · "), width)
+    .map((line) => styleText(options, "muted", `${prefix}${line}`))
+    .join("\n");
+}
+
+function renderBody(
+  record: PublicObservationRecord,
+  options: HumanRenderOptions,
+): string {
+  const prefix = styleText(options, "muted", "  │ ");
+  const width = Math.max(1, contentWidth(options) - 4);
+  return wrapText(record.body, width)
+    .map((line) => `${prefix}${line}`)
+    .join("\n");
 }
 
 function renderRecord(
@@ -61,35 +102,18 @@ function renderRecord(
 ): string {
   const status = record.status.toUpperCase();
   const symbol = record.status === "open" ? "●" : "✓";
-  const details: string[] = [];
-
-  if (record.repository !== null) {
-    const branch = record.repository.branch === null
-      ? ""
-      : ` · branch ${record.repository.branch}`;
-    details.push(
-      detailLine(
-        options,
-        "Repository",
-        `${record.repository.name}:${record.repository.cwdRelative}${branch}`,
-      ),
-    );
-  }
-
-  if (record.area !== null) {
-    details.push(detailLine(options, "Area", record.area));
-  }
-
-  if (record.impacts.length > 0) {
-    details.push(detailLine(options, "Impact", record.impacts.join(", ")));
-  }
+  const metadata = renderMetadata(record, options);
+  const identity = [
+    styleText(options, statusTone(record.status), `${symbol} ${status}`),
+    styleText(options, "muted", ` · ${formatTimestamp(record.createdAt)} · `),
+    styleText(options, "accent", record.observationId),
+  ].join("");
 
   return [
-    `${styleText(options, statusTone(record.status), `${symbol} ${status}`)} · ${formatTimestamp(record.createdAt)}`,
-    styleText(options, "accent", record.observationId),
-    ...details,
+    identity,
+    ...(metadata === null ? [] : [metadata]),
     "",
-    record.body,
+    renderBody(record, options),
   ].join("\n");
 }
 
@@ -99,7 +123,7 @@ export function renderList(
 ): string {
   const header = [
     styleText(options, "heading", "Friction observations"),
-    styleText(options, "muted", `${countLabel(data)} · ${scopeLabel(data.scope)}`),
+    styleText(options, "muted", summaryLabel(data)),
   ];
 
   if (data.records.length === 0) {
@@ -112,5 +136,7 @@ export function renderList(
     data.records
       .map((record) => renderRecord(record, options))
       .join(`\n${renderDivider(options)}\n`),
+    "",
+    styleText(options, "muted", `End · ${summaryLabel(data)}`),
   ].join("\n") + "\n";
 }

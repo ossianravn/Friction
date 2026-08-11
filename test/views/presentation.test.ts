@@ -15,7 +15,8 @@ test("human output is structured and color follows terminal conventions", () => 
       {
         observationId: `fr_${"a".repeat(32)}`,
         createdAt: "2026-08-10T22:12:22.436Z",
-        body: "A sandbox boundary caused a retry.",
+        body:
+          "A sandbox boundary caused a retry while validating a change, and the workaround required a second command because the first result looked successful.",
         source: "codex",
         model: null,
         area: "tooling",
@@ -61,12 +62,33 @@ test("human output is structured and color follows terminal conventions", () => 
   assert.match(colored, escapeSequence);
   const plain = renderList(listData, { ...interactive, color: false });
   assert.match(plain, /Friction observations/u);
-  assert.match(plain, /● OPEN · 2026-08-10 22:12 UTC/u);
+  assert.match(
+    plain,
+    new RegExp(`● OPEN · 2026-08-10 22:12 UTC · fr_${"a".repeat(32)}`, "u"),
+  );
   assert.match(plain, /✓ RESOLVED/u);
-  assert.match(plain, /Repository\s+friction:\. · branch main/u);
-  assert.match(plain, /Impact\s+retry, slow-path/u);
+  assert.match(
+    plain,
+    /  repo friction:\. · branch main · area tooling · impact retry, slow-path/u,
+  );
+  assert.match(plain, /  │ A sandbox boundary caused a retry/u);
+  assert.match(plain, /End · 2 observations · all repositories/u);
   assert.equal(plain.includes("unclassified"), false);
   assert.equal(plain.includes("impacts: none"), false);
+
+  for (const columns of [80, 120, 200]) {
+    const width = Math.min(96, columns - 1);
+    const responsive = renderList(listData, { color: false, columns });
+    const bodyLines = responsive
+      .split("\n")
+      .filter((line) => line.startsWith("  │ "));
+    assert.equal(responsive.includes("─".repeat(width)), true);
+    assert.equal(bodyLines.length >= 3, true);
+    assert.equal(
+      bodyLines.every((line) => Array.from(line).length <= width),
+      true,
+    );
+  }
 
   const noColor = humanRenderOptions(
     { isTTY: true, columns: 80 },

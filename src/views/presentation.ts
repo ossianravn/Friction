@@ -22,6 +22,8 @@ const sequences: Readonly<Record<TextTone, string>> = {
   error: "\u001b[31m",
 };
 
+const MAX_CONTENT_WIDTH = 96;
+
 export function styleText(
   options: HumanRenderOptions,
   tone: TextTone,
@@ -35,9 +37,14 @@ export function formatTimestamp(value: string): string {
   return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
 }
 
+export function contentWidth(options: HumanRenderOptions): number {
+  const available = options.columns === null
+    ? MAX_CONTENT_WIDTH
+    : Math.max(1, options.columns - 1);
+
+  return Math.min(MAX_CONTENT_WIDTH, available);
+}
+
 export function renderDivider(options: HumanRenderOptions): string {
-  const width = options.columns === null
-    ? 64
-    : Math.min(64, Math.max(1, options.columns - 1));
-  return styleText(options, "muted", "─".repeat(width));
+  return styleText(options, "muted", "─".repeat(contentWidth(options)));
 }
