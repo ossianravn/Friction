@@ -90,6 +90,38 @@ Install Friction in the same environment where your coding agent runs. Native Wi
 and WSL are separate environments: each has its own command installation, setup, and
 private Friction store. If you use both, install and configure both separately.
 
+#### Update Friction
+
+Update the global package with the same package manager you used to install it:
+
+```sh
+npm install --global @ossianravn/friction@latest
+```
+
+Or with pnpm:
+
+```sh
+pnpm add --global @ossianravn/friction@latest
+```
+
+Confirm the installed version, then preview and reapply setup for each coding agent you
+configured:
+
+```sh
+friction --version
+friction setup codex
+friction setup codex --apply
+friction setup claude-code
+friction setup claude-code --apply
+```
+
+Updating the package does not rewrite installed instructions or skills automatically.
+Reapplying setup refreshes only Friction-owned content and preserves unrelated
+instructions. If you previously used repository-level setup, run the matching commands
+from that repository with `--scope repo`. Start a new coding-agent session afterward so
+it loads the updated instructions and skills. Repeat the update in native Windows and
+WSL if you use both environments.
+
 ### 2. Connect Friction to your coding agent
 
 You do not need to find or edit an `AGENTS.md` file yourself. Friction setup finds the
