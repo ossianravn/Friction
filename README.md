@@ -104,8 +104,28 @@ Or with pnpm:
 pnpm add --global @ossianravn/friction@latest
 ```
 
-Confirm the installed version, then preview and reapply setup for each coding agent you
-configured:
+If npm reports `EEXIST` for the `friction` executable, do not use `--force`. An
+older global package or a different package manager still owns that command. Inspect
+the current global package owner first:
+
+```sh
+npm list --global --depth=0
+```
+
+If that output lists the pre-release unscoped `friction@0.0.0` development install,
+migrate once with:
+
+```sh
+npm uninstall --global friction
+npm install --global @ossianravn/friction@latest
+```
+
+Use `pnpm remove --global friction` instead when pnpm created the old install. Continue
+updating with the same package manager afterward. Once the scoped package owns the
+`friction` executable, normal updates replace it without this migration step.
+
+After every package update, confirm the installed version, then preview and reapply setup
+for each coding agent configured in that environment:
 
 ```sh
 friction --version
@@ -113,14 +133,21 @@ friction setup codex
 friction setup codex --apply
 friction setup claude-code
 friction setup claude-code --apply
+friction doctor
 ```
 
 Updating the package does not rewrite installed instructions or skills automatically.
 Reapplying setup refreshes only Friction-owned content and preserves unrelated
-instructions. If you previously used repository-level setup, run the matching commands
-from that repository with `--scope repo`. Start a new coding-agent session afterward so
-it loads the updated instructions and skills. Repeat the update in native Windows and
-WSL if you use both environments.
+instructions. A setup preview ending in `noop` is already current; `create` or `update`
+requires the matching `--apply` command. If you previously used repository-level setup,
+run the matching commands from that repository with `--scope repo`. Start a new
+coding-agent session afterward so it loads the updated instructions and skills. Repeat
+the update in native Windows and WSL if you use both environments.
+
+Global packages installed through nvm or another Node version manager belong to the
+active Node installation. After switching Node versions, run `friction --version`; if
+the command is missing, install the scoped package in that Node environment and verify
+setup again with `friction doctor`.
 
 ### 2. Connect Friction to your coding agent
 
