@@ -249,6 +249,10 @@ friction stats --status all
 friction doctor
 ```
 
+Human-readable `list`, `stats`, and `doctor` output uses structured sections and
+automatically adds color in interactive terminals. Color is disabled for redirected or
+piped output; set the standard `NO_COLOR` environment variable to turn it off explicitly.
+
 Inside a Git repository, read commands use that repository by default. Outside Git, they
 use all repositories. If Friction knows it is in a repository but cannot identify that
 repository safely, it refuses the implicit read instead of showing unrelated private

@@ -1,18 +1,19 @@
 import { runDoctor } from "../../doctor/checks.js";
+import { renderDoctor } from "../../views/doctor.js";
+import type { HumanRenderOptions } from "../../views/presentation.js";
 import { exitCodes } from "../exit-codes.js";
 import type { CommandExecution } from "./types.js";
 
-export async function executeDoctor(): Promise<CommandExecution> {
+export async function executeDoctor(
+  presentation: HumanRenderOptions,
+): Promise<CommandExecution> {
   const checks = await runDoctor();
   const hasError = checks.some((check) => check.status === "error");
-  const human = `${checks
-    .map((check) => `${check.status.toUpperCase()} ${check.name}: ${check.message}`)
-    .join("\n")}\n`;
 
   return {
     command: "doctor",
     data: { checks },
-    human,
+    human: renderDoctor(checks, presentation),
     warnings: [],
     exitCode: hasError ? exitCodes.internalOrIo : exitCodes.success,
   };

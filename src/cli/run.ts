@@ -1,6 +1,7 @@
 import type { Readable } from "node:stream";
 
 import { FrictionFailure, type FailureCode } from "../domain/failures.js";
+import type { HumanRenderOptions } from "../views/presentation.js";
 import { CLI_VERSION } from "../version.js";
 import { executeAdd } from "./commands/add.js";
 import { executeDoctor } from "./commands/doctor.js";
@@ -20,6 +21,7 @@ import {
   type CommandName,
 } from "./output.js";
 import { parseRequest } from "./parse.js";
+import { humanRenderOptions } from "./presentation.js";
 import type { ImplementedCommand, ParsedRequest } from "./requests.js";
 import { currentSchema } from "./schema.js";
 
@@ -27,10 +29,16 @@ type WritableOutput = {
   write(value: string): unknown;
 };
 
+type HumanOutput = WritableOutput & {
+  isTTY?: boolean;
+  columns?: number;
+};
+
 export type CliIo = {
   stdin: Readable;
-  stdout: WritableOutput;
+  stdout: HumanOutput;
   stderr: WritableOutput;
+  environment: NodeJS.ProcessEnv;
 };
 
 function commandName(arguments_: readonly string[]): CommandName {
@@ -72,14 +80,15 @@ function failureCode(error: unknown): FailureCode {
 async function executeRequest(
   request: Exclude<ParsedRequest, { kind: "help" | "version" | "schema" }>,
   stdin: Readable,
+  presentation: HumanRenderOptions,
 ): Promise<CommandExecution> {
   switch (request.kind) {
     case "add":
       return executeAdd(request, stdin);
     case "list":
-      return executeList(request);
+      return executeList(request, presentation);
     case "stats":
-      return executeStats(request);
+      return executeStats(request, presentation);
     case "resolve":
     case "reopen":
       return executeLifecycle(request);
@@ -90,7 +99,7 @@ async function executeRequest(
     case "purge":
       return executePurge(request);
     case "doctor":
-      return executeDoctor();
+      return executeDoctor(presentation);
     case "setup":
       return executeSetup(request);
   }
@@ -121,7 +130,8 @@ export async function runCli(
       return 0;
     }
 
-    const result = await executeRequest(request, io.stdin);
+    const presentation = humanRenderOptions(io.stdout, io.environment);
+    const result = await executeRequest(request, io.stdin, presentation);
 
     if (request.json) {
       writeJsonSuccess(io.stdout, result.command, result.data, result.warnings);
