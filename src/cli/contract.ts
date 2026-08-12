@@ -55,7 +55,7 @@ export const commandContract: Record<ImplementedCommand, CommandContract> = {
     syntax: ["friction add TEXT", "friction add --stdin [options]"],
     options: [
       { name: "--stdin", description: "Read the body from stdin; recommended for agents." },
-      { name: "--source SOURCE", description: "Set manual, codex, claude-code, or generic." },
+      { name: "--source SOURCE", description: "Set a valid lowercase source identifier." },
       { name: "--model MODEL", description: "Record optional screened model context." },
       { name: "--area AREA", description: "Record one supported product area." },
       { name: "--impact IMPACT", description: "Record a repeatable supported impact." },
@@ -147,8 +147,10 @@ export const commandContract: Record<ImplementedCommand, CommandContract> = {
   },
   doctor: {
     purpose: "Diagnose runtime, storage, repository, and setup health.",
-    syntax: ["friction doctor"],
-    options: [],
+    syntax: ["friction doctor [--integration ID]"],
+    options: [
+      { name: "--integration ID", description: "Run a focused setup check for one integration." },
+    ],
     notes: [
       "May create and remove one harmless probe inside the private temp directory; never repairs findings.",
       "On Windows, checks the private ACL and required local-filesystem primitives with safe messages.",
@@ -156,16 +158,26 @@ export const commandContract: Record<ImplementedCommand, CommandContract> = {
     effects: { ...readOnly, readOnly: false },
   },
   setup: {
-    purpose: "Preview or manage harness instructions and skills.",
-    syntax: ["friction setup codex|claude-code|generic [--scope user|repo] [--undo] [--apply]"],
+    purpose: "Preview or manage agent instructions and skills.",
+    syntax: [
+      "friction setup --list",
+      "friction setup INTEGRATION [--scope user|repo|workspace] [--workspace PATH] [--undo] [--apply]",
+      "friction setup generic [--source ID] [--shell posix|powershell|portable]",
+    ],
     options: [
-      { name: "--scope user|repo", description: "Select setup scope; default user." },
+      { name: "--list", description: "Show the static integration capability matrix." },
+      { name: "--scope SCOPE", description: "Select user, repository, or workspace scope." },
+      { name: "--workspace PATH", description: "Select an explicit workspace for workspace scope." },
+      { name: "--source ID", description: "Set the generic adapter's source identifier." },
+      { name: "--shell SHELL", description: "Set the generic capture transport." },
       { name: "--undo", description: "Plan removal of known managed content." },
       { name: "--apply", description: "Apply the setup or undo plan." },
     ],
     notes: [
-      "Preview is the default and writes nothing. Generic setup is output-only.",
-      "Native Windows Codex uses PowerShell guidance; Claude Code uses its documented Git Bash path.",
+      "Use standard for portable repository setup, skills for shared skill lifecycle, and named adapters for client-specific setup.",
+      "Preview is the default. Generic setup is output-only; named adapter undo retains shared skills.",
+      "Remote agents need friction installed and configured inside their runtime.",
+      "Run friction setup --list for scopes, support state, and caveats.",
       "Setup never edits shell profiles or installs the friction command.",
     ],
     effects: { ...readOnly, readOnly: false, writesConfiguration: true, previewDefault: true },

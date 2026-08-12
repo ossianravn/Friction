@@ -2,6 +2,9 @@ import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import type { Source } from "../domain/source.js";
+import type { CaptureTransport } from "../integrations/types.js";
+
 const packageRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 export type SkillAsset = {
@@ -71,41 +74,48 @@ export async function loadSetupAssets(): Promise<SetupAssets> {
 
 export function captureInstruction(
   assets: SetupAssets,
-  source: "codex" | "claude-code" | "generic",
-  shell: "posix" | "powershell",
+  source: Source,
+  transport: CaptureTransport,
 ): Buffer {
-  const command = captureCommand(assets, source, shell);
+  const command = captureCommand(assets, source, transport);
   return Buffer.from(assets.captureShared.replace("{{COMMAND}}", command), "utf8");
 }
 
 function captureCommand(
   assets: SetupAssets,
-  source: "codex" | "claude-code" | "generic",
-  shell: "posix" | "powershell",
+  source: Source,
+  transport: CaptureTransport,
 ): string {
-  const template = shell === "powershell"
-    ? assets.capturePowerShell
-    : assets.capturePosix;
+  if (transport === "portable") {
+    return [
+      "Use the form for the current shell:",
+      "",
+      "POSIX shells:",
+      captureCommand(assets, source, "posix"),
+      "",
+      "PowerShell:",
+      captureCommand(assets, source, "powershell"),
+    ].join("\n");
+  }
+
+  const template =
+    transport === "powershell" ? assets.capturePowerShell : assets.capturePosix;
   return template.replaceAll("{{SOURCE}}", source).trimEnd();
 }
 
 export function genericCaptureSnippet(
   assets: SetupAssets,
-  windows: boolean,
+  source: Source,
+  transport: CaptureTransport,
 ): string {
+  const guidance = captureInstruction(assets, source, transport)
+    .toString("utf8")
+    .trimEnd();
   const skills = `Skills: ${packagedSkillPaths().join(", ")}`;
-
-  if (!windows) {
-    return `${captureCommand(assets, "generic", "posix")}\n${skills}`;
-  }
-
   return [
-    "PowerShell:",
-    captureCommand(assets, "generic", "powershell"),
-    "",
-    "Git Bash:",
-    captureCommand(assets, "generic", "posix"),
+    guidance,
     skills,
+    "Runtime: install and run friction in the same environment as the agent.",
   ].join("\n");
 }
 

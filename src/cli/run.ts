@@ -67,7 +67,7 @@ function writeHelp(output: WritableOutput, command: ImplementedCommand | null): 
   }
 
   output.write(
-    `Usage: friction <command> [options]\n\nCommands:\n${commandNames
+    `Friction is a local-first feedback loop for coding agents.\n\nUsage: friction <command> [options]\n\nCommands:\n${commandNames
       .map((name) => `  ${name.padEnd(8)} ${commandContract[name].purpose}`)
       .join("\n")}\n\nCommon options: --help, --version, --json\n\nPlatforms: macOS, Linux, WSL, and native Windows 11 x64.\nRun friction schema for the machine-readable platform, privacy, and side-effect contract.\n`,
   );
@@ -99,8 +99,9 @@ async function executeRequest(
     case "purge":
       return executePurge(request);
     case "doctor":
-      return executeDoctor(presentation);
+      return executeDoctor(presentation, request);
     case "setup":
+    case "setup-list":
       return executeSetup(request);
   }
 }

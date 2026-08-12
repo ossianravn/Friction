@@ -1,6 +1,7 @@
 import type { ScreenedText } from "../security/screened-text.js";
+import type { Source } from "./source.js";
 
-export const sources = ["manual", "codex", "claude-code", "generic"] as const;
+export { builtInSources as sources, isSource, type Source } from "./source.js";
 export const areas = [
   "design",
   "docs",
@@ -25,7 +26,6 @@ export const impacts = [
 ] as const;
 export const eventTypes = ["observation", "resolved", "reopened"] as const;
 
-export type Source = (typeof sources)[number];
 export type Area = (typeof areas)[number];
 export type Impact = (typeof impacts)[number];
 
@@ -94,10 +94,6 @@ export type ObservationRecord = {
   resolution: ResolvedEvent | null;
   lastLifecycleEvent: ResolvedEvent | ReopenedEvent | null;
 };
-
-export function isSource(value: string): value is Source {
-  return (sources as readonly string[]).includes(value);
-}
 
 export function isArea(value: string): value is Area {
   return (areas as readonly string[]).includes(value);

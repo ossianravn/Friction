@@ -49,7 +49,7 @@ function parseAdd(arguments_: readonly string[]): ParsedRequest {
 }
 
 function parseSimple(
-  command: "doctor" | "schema",
+  command: "schema",
   arguments_: readonly string[],
 ): ParsedRequest {
   const parsed = parseArgs({
@@ -71,9 +71,35 @@ function parseSimple(
     return { kind: "help", command };
   }
 
-  return command === "doctor"
-    ? { kind: "doctor", json: parsed.values["json"] ?? false }
-    : { kind: "schema" };
+  return { kind: "schema" };
+}
+
+function parseDoctor(arguments_: readonly string[]): ParsedRequest {
+  const parsed = parseArgs({
+    args: [...arguments_],
+    allowPositionals: false,
+    strict: true,
+    options: {
+      integration: { type: "string" },
+      json: { type: "boolean" },
+      help: { type: "boolean" },
+      version: { type: "boolean" },
+    },
+  });
+
+  if (parsed.values["version"] === true) {
+    return { kind: "version" };
+  }
+
+  if (parsed.values["help"] === true) {
+    return { kind: "help", command: "doctor" };
+  }
+
+  return {
+    kind: "doctor",
+    json: parsed.values["json"] ?? false,
+    integration: parsed.values["integration"],
+  };
 }
 
 export function parseRequest(arguments_: readonly string[]): ParsedRequest {
@@ -104,7 +130,11 @@ export function parseRequest(arguments_: readonly string[]): ParsedRequest {
       return parsePublish(arguments_.slice(1));
     }
 
-    if (command === "doctor" || command === "schema") {
+    if (command === "doctor") {
+      return parseDoctor(arguments_.slice(1));
+    }
+
+    if (command === "schema") {
       return parseSimple(command, arguments_.slice(1));
     }
 

@@ -8,8 +8,6 @@ import { discoverRepository } from "../repository/discover.js";
 import { executableOnPath } from "../platform/path.js";
 import { resolveRuntimePlatform } from "../platform/runtime-platform.js";
 import { redact } from "../security/redact.js";
-import { buildSetupPlan } from "../setup/plan.js";
-import type { SetupHarness } from "../setup/types.js";
 import { loadEvents } from "../storage/load-events.js";
 import { resolveFrictionPaths } from "../storage/paths.js";
 import {
@@ -18,6 +16,7 @@ import {
 } from "../storage/private-store.js";
 import { CLI_VERSION } from "../version.js";
 import { windowsPrivateStoreChecks } from "./windows-checks.js";
+import { integrationChecks } from "./integration-checks.js";
 
 export type DoctorCheck = {
   name: string;
@@ -80,27 +79,10 @@ async function probeTemporaryDirectory(directory: string): Promise<DoctorCheck> 
   }
 }
 
-async function setupCheck(harness: SetupHarness, cwd: string): Promise<DoctorCheck> {
-  const name = `setup-${harness}`;
-
-  try {
-    const plan = await buildSetupPlan({ harness, scope: "user", undo: false, cwd });
-    const conflict = plan.targets.some((target) => target.state === "conflict");
-    const installed = plan.targets.every((target) => target.state === "noop");
-
-    if (conflict) {
-      return { name, status: "warn", message: `${harness} setup has conflicting files.` };
-    }
-
-    return installed
-      ? { name, status: "ok", message: `${harness} setup is current.` }
-      : { name, status: "warn", message: `${harness} setup is not installed or is incomplete.` };
-  } catch {
-    return { name, status: "warn", message: `${harness} setup state is unavailable.` };
-  }
-}
-
-export async function runDoctor(cwd: string = process.cwd()): Promise<DoctorCheck[]> {
+export async function runDoctor(
+  cwd: string = process.cwd(),
+  integration?: string,
+): Promise<DoctorCheck[]> {
   const platform = resolveRuntimePlatform();
   const paths = resolveFrictionPaths();
   const checks: DoctorCheck[] = [
@@ -237,6 +219,6 @@ export async function runDoctor(cwd: string = process.cwd()): Promise<DoctorChec
       ? "friction is discoverable on PATH."
       : "friction is not discoverable on PATH.",
   });
-  checks.push(await setupCheck("codex", cwd), await setupCheck("claude-code", cwd));
+  checks.push(...await integrationChecks(integration, cwd));
   return checks;
 }

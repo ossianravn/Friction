@@ -1,11 +1,14 @@
 {
   "name": "@ossianravn/friction",
-  "version": "0.1.4",
-  "description": "A local-first feedback loop for recurring coding-agent friction.",
+  "version": "0.2.0",
+  "description": "A local-first feedback loop for coding agents and agent frameworks.",
   "keywords": [
     "codex",
     "claude-code",
     "coding-agents",
+    "agent-frameworks",
+    "agents-md",
+    "agent-skills",
     "developer-tools",
     "local-first"
   ],

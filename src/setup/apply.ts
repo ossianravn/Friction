@@ -45,7 +45,7 @@ async function acquireLock(plan: SetupPlan): Promise<{
   const lockRoot = paths.setupLocks;
   await ensureSetupLockStore(paths);
   const lockIdentity = JSON.stringify({
-    harness: plan.harness,
+    integration: plan.integration,
     scope: plan.scope,
     roots: [...new Set(plan.lockRoots)].sort().map((root) => redact(root).text),
   });
@@ -118,7 +118,8 @@ async function stageTarget(
     throw new FrictionFailure("setup_conflict");
   }
 
-  const mode = target.snapshot.mode ?? (plan.scope === "user" ? 0o600 : 0o644);
+  const mode = target.snapshot.mode ??
+    (target.permissions === "private" ? 0o600 : 0o644);
   const temporaryPath = await stageFileReplacement(
     target.path,
     target.desiredBytes,
@@ -182,11 +183,7 @@ export async function applySetupPlan(plan: SetupPlan): Promise<void> {
     await assertCurrent(plan);
     const directories = await plannedSetupDirectories(plan);
     await assertCurrent(plan);
-    await createSetupDirectories(
-      directories,
-      plan.scope === "user" ? 0o700 : 0o755,
-      createdDirectories,
-    );
+    await createSetupDirectories(directories, createdDirectories);
 
     const orderedTargets = [...plan.targets].sort((left, right) => {
       const leftOrder = left.kind === "managed-block" ? 0 : 1;

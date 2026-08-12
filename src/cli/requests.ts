@@ -46,12 +46,16 @@ export type ParsedRequest =
       apply: boolean;
     }
   | { kind: "purge"; json: boolean; observationId: string; apply: boolean }
-  | { kind: "doctor"; json: boolean }
+  | { kind: "doctor"; json: boolean; integration: string | undefined }
+  | { kind: "setup-list"; json: boolean }
   | {
       kind: "setup";
       json: boolean;
-      harness: string;
+      integration: string;
       scope: string | undefined;
+      workspace: string | undefined;
+      source: string | undefined;
+      shell: string | undefined;
       apply: boolean;
       undo: boolean;
     }

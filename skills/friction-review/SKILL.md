@@ -1,6 +1,8 @@
 ---
 name: friction-review
 description: Review, analyze, triage, summarize, or prioritize captured Friction observations; identify recurring design, documentation, tooling, or harness problems; decide what should be fixed first; or assess whether prior fixes hold. Use only for an explicit review request, never automatically at session end.
+license: MIT
+compatibility: Requires the friction CLI on PATH and permission to read its private local store.
 ---
 
 # Review Friction

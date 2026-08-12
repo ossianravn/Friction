@@ -1,5 +1,9 @@
-export type SetupHarness = "codex" | "claude-code" | "generic";
-export type SetupScope = "user" | "repo";
+import type {
+  IntegrationId,
+  ScopeCapability,
+  SetupScope,
+} from "../integrations/types.js";
+
 export type SetupTargetKind = "managed-block" | "owned-file";
 export type MutationState = "create" | "update" | "remove" | "noop" | "conflict";
 
@@ -14,38 +18,44 @@ export type SetupTarget = {
   scopeRoot: string;
   path: string;
   kind: SetupTargetKind;
+  permissions: "private" | "shared";
   snapshot: FileSnapshot;
   desiredBytes: Buffer | null;
   state: MutationState;
 };
 
-export type CodexInstructionPrecondition = {
-  kind: "codex-instruction-precedence";
+export type FileSnapshotsPrecondition = {
+  kind: "file-snapshots";
   scopeRoot: string;
-  overridePath: string;
-  overrideSnapshot: FileSnapshot;
-  agentsPath: string;
-  agentsSnapshot: FileSnapshot;
-  selectedPath: string;
+  files: Array<{ path: string; snapshot: FileSnapshot }>;
 };
 
-export type SetupPrecondition = CodexInstructionPrecondition;
-
 export type SetupPlan = {
-  harness: SetupHarness;
+  integration: IntegrationId;
   scope: SetupScope;
   lockRoots: string[];
   undo: boolean;
   targets: SetupTarget[];
-  preconditions: SetupPrecondition[];
+  preconditions: FileSnapshotsPrecondition[];
+  coverage: ScopeCapability;
+  manualSteps: string[];
   snippet: string | null;
+  warnings: SetupWarning[];
+};
+
+export type SetupWarning = {
+  code: "shared_skills_retained";
+  message: string;
 };
 
 export type SetupData = {
-  harness: SetupHarness;
+  integration: IntegrationId;
   scope: SetupScope;
   action: "preview-apply" | "apply" | "preview-undo" | "undo";
   state: MutationState;
+  ready: boolean;
+  coverage: ScopeCapability;
   mutations: Array<{ path: string; kind: SetupTargetKind; state: MutationState }>;
+  manualSteps: string[];
   snippet: string | null;
 };

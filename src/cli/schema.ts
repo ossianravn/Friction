@@ -1,4 +1,4 @@
-import { areas, eventTypes, impacts, sources } from "../domain/events.js";
+import { areas, eventTypes, impacts } from "../domain/events.js";
 import {
   BODY_MAX_BYTES,
   BRANCH_MAX_BYTES,
@@ -9,6 +9,12 @@ import {
   REPOSITORY_IDENTITY_MAX_BYTES,
   REPOSITORY_NAME_MAX_BYTES,
 } from "../domain/limits.js";
+import {
+  builtInSources,
+  SOURCE_IDENTIFIER_MAX_BYTES,
+  SOURCE_IDENTIFIER_PATTERN,
+} from "../domain/source.js";
+import { integrationCatalog } from "../integrations/catalog.js";
 import { CLI_VERSION } from "../version.js";
 import { commandContract, commandNames } from "./contract.js";
 import { errorDictionary } from "./errors.js";
@@ -26,25 +32,31 @@ function eventFields(specific: readonly string[]): string[] {
   return [...eventBaseFields, ...specific, "redaction", "clientVersion"];
 }
 
+function commands() {
+  return Object.fromEntries(
+    commandNames.map((name) => [
+      name,
+      {
+        purpose: commandContract[name].purpose,
+        syntax: commandContract[name].syntax,
+        flags: [
+          ...commandContract[name].options.map(
+            (option) => option.name.split(" ")[0],
+          ),
+          "--json",
+        ],
+        notes: commandContract[name].notes,
+        effects: commandContract[name].effects,
+      },
+    ]),
+  );
+}
+
 export function currentSchema(): object {
   return {
-    contractVersion: 1,
+    contractVersion: 2,
     cliVersion: CLI_VERSION,
-    commands: Object.fromEntries(
-      commandNames.map((name) => [
-        name,
-        {
-          purpose: commandContract[name].purpose,
-          syntax: commandContract[name].syntax,
-          flags: [
-            ...commandContract[name].options.map((option) => option.name.split(" ")[0]),
-            "--json",
-          ],
-          notes: commandContract[name].notes,
-          effects: commandContract[name].effects,
-        },
-      ]),
-    ),
+    commands: commands(),
     commonFlags: ["--help", "--version", "--json"],
     platforms: {
       darwin: { supported: true },
@@ -79,12 +91,14 @@ export function currentSchema(): object {
         "lock-file",
       ],
     },
-    setupAdapters: {
-      codex: { darwin: "posix", linux: "posix", win32: "powershell" },
-      claudeCode: { darwin: "posix", linux: "posix", win32: "git-bash" },
-      generic: { darwin: ["posix"], linux: ["posix"], win32: ["powershell", "git-bash"] },
+    integrations: integrationCatalog,
+    sourceIdentifiers: {
+      pattern: SOURCE_IDENTIFIER_PATTERN,
+      maximumUtf8Bytes: SOURCE_IDENTIFIER_MAX_BYTES,
+      builtInExamples: builtInSources,
+      informationalOnly: true,
     },
-    enums: { sources, areas, impacts },
+    enums: { areas, impacts },
     byteLimits: {
       body: BODY_MAX_BYTES,
       model: MODEL_MAX_BYTES,
@@ -140,7 +154,11 @@ export function currentSchema(): object {
         "resolution",
         "redactionCount",
       ],
-      omittedPrivateFields: ["repository.key", "repository.head", "lastLifecycleEvent"],
+      omittedPrivateFields: [
+        "repository.key",
+        "repository.head",
+        "lastLifecycleEvent",
+      ],
     },
     publishedObservation: {
       schemaVersion: 1,
@@ -171,10 +189,15 @@ export function currentSchema(): object {
       "USERPROFILE",
       "LOCALAPPDATA",
       "CODEX_HOME",
+      "HERMES_HOME",
       "PATH",
       "PATHEXT",
       "SystemRoot",
       "ComSpec",
+    ],
+    notes: [
+      "Standard repository setup uses AGENTS.md and Agent Skills.",
+      "Remote environments require their own CLI installation and setup.",
     ],
   };
 }

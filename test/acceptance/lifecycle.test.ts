@@ -26,6 +26,16 @@ test("resolve and reopen append deterministic lifecycle state and remain idempot
   assert.deepEqual(stats["byStatus"], { open: 2 });
   assert.deepEqual(stats["exactRepeats"], [{ body: repeatedBody, count: 2 }]);
 
+  const credentialSource = `sk-${"b".repeat(20)}`;
+  const unsafeSource = await runFriction({
+    arguments: ["resolve", firstId, "--source", credentialSource, "--json"],
+    cwd: context.work,
+    home: context.home,
+  });
+  assert.equal(unsafeSource.code, 2);
+  assert.equal(unsafeSource.stdout.includes(credentialSource), false);
+  assert.equal((await eventNames(context.home)).length, 2);
+
   const resolved = envelope(
     await runFriction({
       arguments: [
@@ -36,7 +46,7 @@ test("resolve and reopen append deterministic lifecycle state and remain idempot
         "--verification",
         "MY_API_KEY=lifecycle-verification-canary",
         "--source",
-        "codex",
+        "review-agent",
         "--json",
       ],
       cwd: context.work,

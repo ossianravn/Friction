@@ -9,7 +9,11 @@ export function parseSetup(arguments_: readonly string[]): ParsedRequest {
     allowPositionals: true,
     strict: true,
     options: {
+      list: { type: "boolean" },
       scope: { type: "string" },
+      workspace: { type: "string" },
+      source: { type: "string" },
+      shell: { type: "string" },
       apply: { type: "boolean" },
       undo: { type: "boolean" },
       json: { type: "boolean" },
@@ -26,6 +30,22 @@ export function parseSetup(arguments_: readonly string[]): ParsedRequest {
     return { kind: "help", command: "setup" };
   }
 
+  if (parsed.values["list"] === true) {
+    if (
+      parsed.positionals.length !== 0 ||
+      parsed.values["apply"] === true ||
+      parsed.values["undo"] === true ||
+      parsed.values["scope"] !== undefined ||
+      parsed.values["workspace"] !== undefined ||
+      parsed.values["source"] !== undefined ||
+      parsed.values["shell"] !== undefined
+    ) {
+      throw new FrictionFailure("invalid_input");
+    }
+
+    return { kind: "setup-list", json: parsed.values["json"] ?? false };
+  }
+
   if (parsed.positionals.length !== 1) {
     throw new FrictionFailure("invalid_input");
   }
@@ -33,8 +53,11 @@ export function parseSetup(arguments_: readonly string[]): ParsedRequest {
   return {
     kind: "setup",
     json: parsed.values["json"] ?? false,
-    harness: parsed.positionals[0]!,
+    integration: parsed.positionals[0]!,
     scope: parsed.values["scope"],
+    workspace: parsed.values["workspace"],
+    source: parsed.values["source"],
+    shell: parsed.values["shell"],
     apply: parsed.values["apply"] ?? false,
     undo: parsed.values["undo"] ?? false,
   };

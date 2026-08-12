@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { stat, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -57,6 +57,9 @@ test("missing storage is empty and doctor reports corrupt files without body con
   await securePrivateStoreFile(
     path.join(context.home, "v1", "events", `${overlongEventId}.json`),
   );
+  const claudeRoot = path.join(path.dirname(context.home), ".claude");
+  await mkdir(claudeRoot);
+  await writeFile(path.join(claudeRoot, "CLAUDE.md"), "# Claude-only fallback\n");
 
   const list = await runFriction({
     arguments: ["list", "--status", "all", "--json"],
@@ -97,6 +100,27 @@ test("missing storage is empty and doctor reports corrupt files without body con
       (check) =>
         check["name"] === "event-count" &&
         (check["message"] as string).startsWith("1 valid event"),
+    ),
+    true,
+  );
+  assert.equal(
+    checks.some((check) => check["name"] === "setup-opencode"),
+    false,
+  );
+
+  const focused = await runFriction({
+    arguments: ["doctor", "--integration", "generic", "--json"],
+    cwd: context.work,
+    home: context.home,
+  });
+  assert.equal(focused.code, 1);
+  const focusedChecks = envelope(focused).data["checks"] as Array<
+    Record<string, unknown>
+  >;
+  assert.equal(
+    focusedChecks.some(
+      (check) =>
+        check["name"] === "setup-generic" && check["status"] === "warn",
     ),
     true,
   );

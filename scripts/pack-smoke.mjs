@@ -21,6 +21,29 @@ const packageVersion = packageManifest.version;
 
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), "friction-pack-smoke-"));
 
+async function validatePackagedSkill(packageRoot, skillName) {
+  const skillRoot = path.join(packageRoot, "skills", skillName);
+  const text = await readFile(path.join(skillRoot, "SKILL.md"), "utf8");
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1];
+  assert.equal(typeof frontmatter, "string");
+  const fields = Object.fromEntries(
+    frontmatter.split(/\r?\n/).map((line) => {
+      const separator = line.indexOf(":");
+      assert.notEqual(separator, -1);
+      return [line.slice(0, separator), line.slice(separator + 1).trim()];
+    }),
+  );
+  assert.equal(fields.name, skillName);
+  assert.equal(fields.license, "MIT");
+  assert.equal(fields.description.length > 0, true);
+  assert.equal(fields.description.length <= 1_024, true);
+  assert.equal(fields.compatibility.length > 0, true);
+
+  for (const match of text.matchAll(/\]\((references\/[^)#]+)\)/g)) {
+    await access(path.join(skillRoot, match[1]));
+  }
+}
+
 try {
   const tarballDirectory = path.join(temporaryRoot, "tarball");
   const installDirectory = path.join(temporaryRoot, "install");
@@ -60,6 +83,8 @@ try {
   await access(path.join(packageRoot, "assets", "instructions", "capture-powershell.md"));
   await access(path.join(packageRoot, "skills", "friction-review", "SKILL.md"));
   await access(path.join(packageRoot, "skills", "friction-fix", "SKILL.md"));
+  await validatePackagedSkill(packageRoot, "friction-review");
+  await validatePackagedSkill(packageRoot, "friction-fix");
 
   const environment = childEnvironment({
     HOME: userHome,
@@ -155,10 +180,18 @@ try {
   const setupHelp = await runInstalled(["setup", "--help"], { cwd: workingDirectory });
   assert.match(setupHelp.stdout, /--apply/);
   assert.match(setupHelp.stdout, /[Pp]review/);
+  assert.match(setupHelp.stdout, /setup --list/);
+  const setupList = JSON.parse(
+    (await runInstalled(["setup", "--list", "--json"], {
+      cwd: workingDirectory,
+    })).stdout,
+  );
+  assert.equal(setupList.data.integrations.length, 10);
   const schemaEnvelope = JSON.parse(
     (await runInstalled(["schema"], { cwd: workingDirectory })).stdout,
   );
   const schema = schemaEnvelope.data;
+  assert.equal(schema.contractVersion, 2);
   assert.equal(schema.commands.publish.effects.writesRepository, true);
   assert.equal(schema.commands.setup.effects.previewDefault, true);
   assert.equal(schema.events.reopened.fields.includes("verification"), false);
@@ -169,12 +202,17 @@ try {
   assert.equal(schema.platforms.win32.privateStore, "%LOCALAPPDATA%\\friction");
   assert.equal(schema.platforms.win32.requiresAclVerification, true);
   assert.equal(schema.windows.pathRestrictions.reparsePoints, false);
-  assert.equal(schema.setupAdapters.codex.win32, "powershell");
-  assert.equal(schema.setupAdapters.claudeCode.win32, "git-bash");
+  assert.equal(schema.sourceIdentifiers.pattern, "^[a-z0-9]+(?:-[a-z0-9]+)*$");
+  assert.equal(schema.sourceIdentifiers.maximumUtf8Bytes, 64);
+  assert.equal(schema.integrations.length, 10);
+  assert.equal(
+    schema.integrations.some((entry) => entry.id === "openclaw"),
+    true,
+  );
   assert.equal(schema.environment.includes("PATHEXT"), true);
   const body = expectedBodies[0];
   const added = await runInstalled(
-    ["add", "--stdin", "--source", "generic", "--json"],
+    ["add", "--stdin", "--source", "package-smoke-agent", "--json"],
     { cwd: workingDirectory, input: `${body}\n` },
   );
   assert.equal(added.stdout.includes(body), false);

@@ -2,27 +2,44 @@ import { homedir } from "node:os";
 import path from "node:path";
 
 import { FrictionFailure } from "../domain/failures.js";
+import type { Source } from "../domain/source.js";
+import { planOpenCode, planPi, planWarp } from "../integrations/adapter-community.js";
+import { planClaudeCode, planCodex } from "../integrations/adapter-native.js";
+import { planSkills, planStandard } from "../integrations/adapter-standard.js";
+import { planHermes, planOpenClaw } from "../integrations/adapter-workspace.js";
+import { integrationById } from "../integrations/catalog.js";
+import { createPlan, type AdapterContext } from "../integrations/planning.js";
+import type {
+  CaptureTransport,
+  IntegrationId,
+  ScopeCapability,
+  SetupScope,
+} from "../integrations/types.js";
 import { getEnvironmentValue } from "../platform/environment.js";
 import { resolveRuntimePlatform } from "../platform/runtime-platform.js";
 import { assertSafeWindowsPathInput } from "../platform/windows/path-policy.js";
 import { requireWorktreeRoot } from "../repository/worktree.js";
 import {
-  captureInstruction,
   genericCaptureSnippet,
   loadSetupAssets,
 } from "./assets.js";
-import { canonicalizeSetupRoot, inspectSetupFile } from "./files.js";
-import { activeCodexInstructionPath } from "./preconditions.js";
-import { planManagedBlock, planOwnedFile } from "./target-plan.js";
+import { canonicalizeSetupRoot } from "./files.js";
 import type {
   MutationState,
   SetupData,
-  SetupHarness,
   SetupPlan,
-  SetupPrecondition,
-  SetupScope,
   SetupTarget,
 } from "./types.js";
+
+export type BuildSetupInput = {
+  integration: IntegrationId;
+  scope: SetupScope;
+  undo: boolean;
+  cwd: string;
+  workspace: string | undefined;
+  source: Source | undefined;
+  transport: CaptureTransport | undefined;
+};
 
 function overallState(targets: readonly SetupTarget[]): MutationState {
   for (const state of ["conflict", "create", "update", "remove"] as const) {
@@ -34,148 +51,155 @@ function overallState(targets: readonly SetupTarget[]): MutationState {
   return "noop";
 }
 
-async function addCodexTargets(
-  targets: SetupTarget[],
-  preconditions: SetupPrecondition[],
-  instructionRoot: string,
-  undo: boolean,
-  instruction: Buffer,
-): Promise<void> {
-  const override = path.join(instructionRoot, "AGENTS.override.md");
-  const agents = path.join(instructionRoot, "AGENTS.md");
-  const overrideSnapshot = await inspectSetupFile(instructionRoot, override);
-  const agentsSnapshot = await inspectSetupFile(instructionRoot, agents);
-  const selectedPath = activeCodexInstructionPath(override, overrideSnapshot, agents);
-  preconditions.push({
-    kind: "codex-instruction-precedence",
-    scopeRoot: instructionRoot,
-    overridePath: override,
-    overrideSnapshot,
-    agentsPath: agents,
-    agentsSnapshot,
-    selectedPath,
-  });
+function capability(
+  integration: IntegrationId,
+  scope: SetupScope,
+): ScopeCapability {
+  const match = integrationById(integration).capabilities.find(
+    (candidate) => candidate.scope === scope,
+  );
 
-  for (const instructionPath of undo ? [override, agents] : [selectedPath]) {
-    targets.push(
-      await planManagedBlock(
-        instructionRoot,
-        instructionPath,
-        instruction,
-        undo,
-        instructionPath === override ? overrideSnapshot : agentsSnapshot,
-      ),
-    );
+  if (match === undefined) {
+    throw new FrictionFailure("invalid_input");
   }
+
+  return { ...match };
 }
 
-async function addSkillTargets(
-  targets: SetupTarget[],
-  scopeRoot: string,
-  skillsRoot: string,
-  undo: boolean,
-  skills: Awaited<ReturnType<typeof loadSetupAssets>>["skills"],
-): Promise<void> {
-  for (const asset of skills) {
-    targets.push(
-      await planOwnedFile(
-        asset.assetId,
-        scopeRoot,
-        path.join(skillsRoot, asset.relativePath),
-        asset.bytes,
-        undo,
-      ),
-    );
-  }
-}
-
-export async function buildSetupPlan(input: {
-  harness: SetupHarness;
-  scope: SetupScope;
-  undo: boolean;
-  cwd: string;
-}): Promise<SetupPlan> {
-  const assets = await loadSetupAssets();
+async function requestedRoot(
+  value: string,
+  cwd: string,
+): Promise<string> {
   const windows = resolveRuntimePlatform() === "win32";
+  const checked = windows ? assertSafeWindowsPathInput(value) : value;
+  return canonicalizeSetupRoot(path.resolve(cwd, checked));
+}
 
-  if (input.harness === "generic") {
-    if (input.undo) {
-      throw new FrictionFailure("invalid_input");
-    }
+async function scopeRoot(
+  input: BuildSetupInput,
+  userHome: string,
+): Promise<string | null> {
+  if (input.scope === "user") {
+    return userHome;
+  }
 
-    return {
-      harness: "generic",
+  if (input.scope === "repo") {
+    return requireWorktreeRoot(input.cwd);
+  }
+
+  if (input.workspace === undefined) {
+    throw new FrictionFailure("invalid_input");
+  }
+
+  return requestedRoot(input.workspace, input.cwd);
+}
+
+function defaultTransport(
+  integration: IntegrationId,
+): CaptureTransport {
+  if (integration === "codex") {
+    return resolveRuntimePlatform() === "win32" ? "powershell" : "posix";
+  }
+
+  return integration === "claude-code" ? "posix" : "portable";
+}
+
+export async function buildSetupPlan(input: BuildSetupInput): Promise<SetupPlan> {
+  const assets = await loadSetupAssets();
+
+  if (input.integration === "generic") {
+    const source = input.source ?? "generic";
+    const transport = input.transport ?? "portable";
+    const context: AdapterContext = {
+      integration: "generic",
       scope: input.scope,
-      lockRoots: [],
       undo: false,
-      targets: [],
-      preconditions: [],
-      snippet: genericCaptureSnippet(assets, windows),
+      userHome: homedir(),
+      scopeRoot: null,
+      assets,
+      coverage: capability("generic", input.scope),
+      source,
+      transport,
     };
+    return createPlan(context, {
+      snippet: genericCaptureSnippet(assets, source, transport),
+      manualSteps: [
+        "Place the shown capture guidance and packaged skills in the target agent environment.",
+      ],
+    });
   }
 
   const userHome = await canonicalizeSetupRoot(homedir());
-  const scopeRoot = input.scope === "user" ? userHome : await requireWorktreeRoot(input.cwd);
-  const targets: SetupTarget[] = [];
-  const preconditions: SetupPrecondition[] = [];
+  const root = await scopeRoot(input, userHome);
+  const context: AdapterContext = {
+    integration: input.integration,
+    scope: input.scope,
+    undo: input.undo,
+    userHome,
+    scopeRoot: root,
+    assets,
+    coverage: capability(input.integration, input.scope),
+    source: input.source ?? null,
+    transport: input.transport ?? defaultTransport(input.integration),
+  };
 
-  if (input.harness === "codex") {
-    const configuredCodexHome = getEnvironmentValue("CODEX_HOME");
-    const selectedCodexHome = configuredCodexHome || path.join(userHome, ".codex");
-    const requestedInstructionRoot =
-      input.scope === "user"
-        ? path.resolve(windows ? assertSafeWindowsPathInput(selectedCodexHome) : selectedCodexHome)
-        : scopeRoot;
-    const instructionRoot = input.scope === "user"
-      ? await canonicalizeSetupRoot(requestedInstructionRoot)
-      : requestedInstructionRoot;
-    await addCodexTargets(
-      targets,
-      preconditions,
-      instructionRoot,
-      input.undo,
-      captureInstruction(assets, "codex", windows ? "powershell" : "posix"),
-    );
-    const skillsRoot =
-      input.scope === "user"
-        ? path.join(userHome, ".agents", "skills")
-        : path.join(scopeRoot, ".agents", "skills");
-    await addSkillTargets(targets, scopeRoot, skillsRoot, input.undo, assets.skills);
-  } else {
-    const claudeRoot =
-      input.scope === "user" ? path.join(userHome, ".claude") : path.join(scopeRoot, ".claude");
-    targets.push(
-      await planOwnedFile(
-        "claude-rule",
-        scopeRoot,
-        path.join(claudeRoot, "rules", "friction.md"),
-        captureInstruction(assets, "claude-code", "posix"),
-        input.undo,
-      ),
-    );
-    await addSkillTargets(
-      targets,
-      scopeRoot,
-      path.join(claudeRoot, "skills"),
-      input.undo,
-      assets.skills,
-    );
+  switch (input.integration) {
+    case "standard":
+      return planStandard(context);
+    case "skills":
+      return planSkills(context);
+    case "codex": {
+      const configured = input.scope === "user"
+        ? getEnvironmentValue("CODEX_HOME") ?? path.join(userHome, ".codex")
+        : root;
+      const instructionRoot = configured === null
+        ? null
+        : await requestedRoot(configured, input.cwd);
+
+      if (instructionRoot === null) {
+        throw new FrictionFailure("invalid_input");
+      }
+
+      return planCodex(context, instructionRoot);
+    }
+    case "claude-code":
+      return planClaudeCode(context);
+    case "opencode":
+      return planOpenCode(context);
+    case "pi":
+      return planPi(context);
+    case "warp":
+      return planWarp(context);
+    case "openclaw":
+      return planOpenClaw(context);
+    case "hermes": {
+      const configured = getEnvironmentValue("HERMES_HOME") ??
+        path.join(userHome, ".hermes");
+      return planHermes(
+        context,
+        await requestedRoot(configured, input.cwd),
+      );
+    }
+  }
+}
+
+function isReady(plan: SetupPlan, applied: boolean, state: MutationState): boolean {
+  if (
+    plan.undo ||
+    plan.manualSteps.length > 0 ||
+    plan.coverage.capture !== "managed" ||
+    plan.coverage.skills !== "managed"
+  ) {
+    return false;
   }
 
-  return {
-    harness: input.harness,
-    scope: input.scope,
-    lockRoots: [...new Set(targets.map((target) => target.scopeRoot))].sort(),
-    undo: input.undo,
-    targets,
-    preconditions,
-    snippet: null,
-  };
+  return applied || state === "noop";
 }
 
 export function setupData(plan: SetupPlan, applied: boolean): SetupData {
+  const state = overallState(plan.targets);
   return {
-    harness: plan.harness,
+    integration: plan.integration,
     scope: plan.scope,
     action: plan.undo
       ? applied
@@ -184,12 +208,15 @@ export function setupData(plan: SetupPlan, applied: boolean): SetupData {
       : applied
         ? "apply"
         : "preview-apply",
-    state: overallState(plan.targets),
+    state,
+    ready: isReady(plan, applied, state),
+    coverage: plan.coverage,
     mutations: plan.targets.map((target) => ({
       path: target.path,
       kind: target.kind,
       state: target.state,
     })),
+    manualSteps: plan.manualSteps,
     snippet: plan.snippet,
   };
 }

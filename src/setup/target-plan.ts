@@ -14,6 +14,7 @@ export async function planOwnedFile(
   targetPath: string,
   desired: Buffer,
   undo: boolean,
+  permissions: SetupTarget["permissions"] = "shared",
 ): Promise<SetupTarget> {
   const snapshot = await inspectSetupFile(scopeRoot, targetPath);
   const desiredDigest = setupFileDigest(desired);
@@ -27,6 +28,7 @@ export async function planOwnedFile(
     scopeRoot,
     path: targetPath,
     kind: "owned-file",
+    permissions,
     snapshot,
     desiredBytes: undo ? null : desired,
     state: ownedFileState(snapshot.digest, desiredDigest, knownDigests, undo),
@@ -60,6 +62,7 @@ export async function planManagedBlock(
   content: Buffer,
   undo: boolean,
   knownSnapshot?: FileSnapshot,
+  permissions: SetupTarget["permissions"] = "shared",
 ): Promise<SetupTarget> {
   const snapshot = knownSnapshot ?? await inspectSetupFile(scopeRoot, targetPath);
 
@@ -68,13 +71,22 @@ export async function planManagedBlock(
       const desired = removeManagedBlock(snapshot.bytes);
 
       if (desired === null) {
-        return { scopeRoot, path: targetPath, kind: "managed-block", snapshot, desiredBytes: null, state: "noop" };
+        return {
+          scopeRoot,
+          path: targetPath,
+          kind: "managed-block",
+          permissions,
+          snapshot,
+          desiredBytes: null,
+          state: "noop",
+        };
       }
 
       return {
         scopeRoot,
         path: targetPath,
         kind: "managed-block",
+        permissions,
         snapshot,
         desiredBytes: desired.length === 0 ? null : desired,
         state: desired.length === 0 ? "remove" : "update",
@@ -86,6 +98,7 @@ export async function planManagedBlock(
       scopeRoot,
       path: targetPath,
       kind: "managed-block",
+      permissions,
       snapshot,
       desiredBytes: desired,
       state: !snapshot.exists
@@ -96,7 +109,15 @@ export async function planManagedBlock(
     };
   } catch (error) {
     if (error instanceof FrictionFailure) {
-      return { scopeRoot, path: targetPath, kind: "managed-block", snapshot, desiredBytes: null, state: "conflict" };
+      return {
+        scopeRoot,
+        path: targetPath,
+        kind: "managed-block",
+        permissions,
+        snapshot,
+        desiredBytes: null,
+        state: "conflict",
+      };
     }
 
     throw error;

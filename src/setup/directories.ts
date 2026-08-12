@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { FrictionFailure } from "../domain/failures.js";
 import { missingSetupDirectories } from "./files.js";
-import type { SetupPlan } from "./types.js";
+import type { SetupPlan, SetupTarget } from "./types.js";
 
 function isCode(error: unknown, code: string): boolean {
   return error !== null &&
@@ -12,12 +12,19 @@ function isCode(error: unknown, code: string): boolean {
     error.code === code;
 }
 
+export type PlannedSetupDirectory = {
+  path: string;
+  permissions: SetupTarget["permissions"];
+};
+
 export function compareSetupPaths(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-export async function plannedSetupDirectories(plan: SetupPlan): Promise<string[]> {
-  const directories = new Set<string>();
+export async function plannedSetupDirectories(
+  plan: SetupPlan,
+): Promise<PlannedSetupDirectory[]> {
+  const directories = new Map<string, SetupTarget["permissions"]>();
 
   for (const target of plan.targets) {
     if (target.state === "noop" || target.desiredBytes === null) {
@@ -28,26 +35,36 @@ export async function plannedSetupDirectories(plan: SetupPlan): Promise<string[]
       target.scopeRoot,
       target.path,
     )) {
-      directories.add(directory);
+      const existing = directories.get(directory);
+
+      if (existing !== undefined && existing !== target.permissions) {
+        throw new FrictionFailure("internal_error");
+      }
+
+      directories.set(directory, target.permissions);
     }
   }
 
-  return [...directories].sort(
+  return [...directories].map(([directory, permissions]) => ({
+    path: directory,
+    permissions,
+  })).sort(
     (left, right) =>
-      left.split(path.sep).length - right.split(path.sep).length ||
-      compareSetupPaths(left, right),
+      left.path.split(path.sep).length - right.path.split(path.sep).length ||
+      compareSetupPaths(left.path, right.path),
   );
 }
 
 export async function createSetupDirectories(
-  directories: readonly string[],
-  mode: number,
+  directories: readonly PlannedSetupDirectory[],
   created: string[],
 ): Promise<void> {
   for (const directory of directories) {
     try {
-      await mkdir(directory, { mode });
-      created.push(directory);
+      await mkdir(directory.path, {
+        mode: directory.permissions === "private" ? 0o700 : 0o755,
+      });
+      created.push(directory.path);
     } catch (error) {
       if (isCode(error, "EEXIST")) {
         throw new FrictionFailure("setup_conflict");
@@ -56,7 +73,7 @@ export async function createSetupDirectories(
       throw error;
     }
 
-    const status = await lstat(directory);
+    const status = await lstat(directory.path);
 
     if (status.isSymbolicLink() || !status.isDirectory()) {
       throw new FrictionFailure("setup_conflict");

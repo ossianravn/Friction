@@ -73,6 +73,17 @@ test("stdin capture outside Git stores one private event without echoing its bod
   assert.equal(errorEnvelope["ok"], false);
   assert.equal((errorEnvelope["error"] as Record<string, unknown>)["code"], "invalid_input");
   assert.equal((await eventFiles(fixture.home)).length, 1);
+
+  const credentialSource = `sk-${"a".repeat(20)}`;
+  const unsafeSource = await runFriction({
+    arguments: ["add", "--stdin", "--source", credentialSource, "--json"],
+    cwd: workingDirectory,
+    home: fixture.home,
+    stdin: "This must not persist an unsafe source identifier.",
+  });
+  assert.equal(unsafeSource.code, 2);
+  assert.equal(unsafeSource.stdout.includes(credentialSource), false);
+  assert.equal((await eventFiles(fixture.home)).length, 1);
 });
 
 test("capture from a Git subdirectory stores safe repository identity without dirtying it", async () => {

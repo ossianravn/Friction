@@ -1,7 +1,7 @@
 # Friction
 
-Friction helps Codex and Claude Code remember what made your work harder—not only what
-they finished.
+Friction helps coding agents remember what made your work harder—not only what they
+finished.
 
 Imagine that your coding agent completes a task, but only after it follows an outdated
 guide, searches in the wrong place, and works around a misleading test command. The task
@@ -9,8 +9,9 @@ is done, so those problems usually disappear from view. The next agent can lose 
 the same problems again.
 
 Friction gives your agent a private place to leave a short note when that happens. Later,
-you can ask Codex or Claude Code to review those notes, find repeated problems, verify the
-likely causes against the current code, and recommend what is worth fixing first.
+you can ask an Agent Skills-compatible coding agent to review those notes, find repeated
+problems, verify the likely causes against the current code, and recommend what is worth
+fixing first.
 
 Nothing is reviewed, changed, or shared in the background. You decide when review happens,
 which fix is allowed, and whether any record should be added to a repository.
@@ -37,7 +38,7 @@ remain outside the supported baseline.
 
 ## The workflow in plain language
 
-1. You work with Codex or Claude Code as usual.
+1. You work with your coding agent as usual.
 2. When the agent encounters an avoidable obstacle, it records one short private note and
    continues the main task.
 3. When you are ready, you ask the agent to review the accumulated notes.
@@ -60,7 +61,7 @@ You need:
 
 - Node.js 24 or newer;
 - npm or pnpm; and
-- Codex or Claude Code.
+- a shell-capable coding agent or agent framework.
 
 Install Friction globally with npm:
 
@@ -124,25 +125,27 @@ Use `pnpm remove --global friction` instead when pnpm created the old install. C
 updating with the same package manager afterward. Once the scoped package owns the
 `friction` executable, normal updates replace it without this migration step.
 
-After every package update, confirm the installed version, then preview and reapply setup
-for each coding agent configured in that environment:
+After every package update, confirm the installed version, inspect the available
+integrations, then preview and reapply each setup you use in that environment:
 
 ```sh
 friction --version
+friction setup --list
 friction setup codex
 friction setup codex --apply
-friction setup claude-code
-friction setup claude-code --apply
-friction doctor
+friction doctor --integration codex
 ```
 
 Updating the package does not rewrite installed instructions or skills automatically.
 Reapplying setup refreshes only Friction-owned content and preserves unrelated
 instructions. A setup preview ending in `noop` is already current; `create` or `update`
-requires the matching `--apply` command. If you previously used repository-level setup,
-run the matching commands from that repository with `--scope repo`. Start a new
-coding-agent session afterward so it loads the updated instructions and skills. Repeat
-the update in native Windows and WSL if you use both environments.
+requires the matching `--apply` command. Repeat the preview/apply pair for Claude Code
+or any other named adapter you use. For portable repository setup, run
+`friction setup standard` from that repository. If you previously used a named
+repository-level setup, run it from that repository with `--scope repo`. Start a new
+agent session afterward so it loads the updated instructions and skills. Repeat the
+update inside native Windows, WSL, containers, or remote agent runtimes separately when
+you use them.
 
 Global packages installed through nvm or another Node version manager belong to the
 active Node installation. After switching Node versions, run `friction --version`; if
@@ -151,10 +154,13 @@ setup again with `friction doctor`.
 
 ### 2. Connect Friction to your coding agent
 
-You do not need to find or edit an `AGENTS.md` file yourself. Friction setup finds the
-applicable instruction file, adds only its own managed block, and installs the review and
-fix skills. Setup has two steps: preview the exact plan, then apply it. The preview shows
-the files involved and makes no changes.
+Setup has two steps: preview the exact plan, then apply it. The preview reports files,
+capability coverage, readiness, and manual steps without making changes. Start with
+`friction setup --list` to see the deterministic integration catalog.
+
+Use `standard` for portable repository instructions, `skills` for the standalone
+shared Agent Skills lifecycle, a named adapter for client-specific paths, or `generic`
+for output-only guidance.
 
 For Codex:
 
@@ -173,6 +179,13 @@ friction setup claude-code --apply
 Run both pairs if you use both coding agents. Start a new coding-agent session after
 setup so it reloads its instructions and skills.
 
+For a portable repository setup that can be read by multiple compatible agents:
+
+```sh
+friction setup standard
+friction setup standard --apply
+```
+
 The default user-level setup is the right choice when you work across several
 repositories. For Codex, it uses the active `AGENTS.override.md` or `AGENTS.md` under
 `CODEX_HOME` and installs the skills under your user home. Existing instructions remain
@@ -186,22 +199,52 @@ friction setup codex --scope repo
 friction setup codex --scope repo --apply
 ```
 
-Setup adds three things to the selected coding agent:
+Setup adds up to three things to the selected coding agent:
 
 - a short instruction explaining when to record an observation;
 - a `friction-review` skill for read-only analysis; and
 - a `friction-fix` skill for explicitly authorized fixes.
 
-On native Windows, Codex receives a PowerShell capture instruction with explicit
-no-BOM UTF-8 handling. Claude Code receives the Git Bash form documented for native
-Windows. Generic setup prints both labeled forms. Setup preserves CRLF in existing
-Codex instructions, supports a custom `CODEX_HOME` outside your user home, never edits
-a PowerShell or shell profile, and never installs the CLI. Preview creates no files,
-directories, ACLs, locks, or private store.
+On native Windows, Codex receives a PowerShell capture instruction with explicit no-BOM
+UTF-8 handling. Claude Code receives its documented POSIX/Git Bash form. Portable
+instructions include both POSIX and PowerShell forms. Setup preserves unrelated bytes,
+supports a custom `CODEX_HOME` outside your user home, never edits a shell profile, and
+never installs the CLI. Preview creates no files, directories, ACLs, locks, or private
+store.
+
+#### Integration status
+
+| Integration | Setup model | Public status |
+|---|---|---|
+| Standard project | Repository `AGENTS.md` + `.agents/skills` | Project standard |
+| Agent Skills | User, repository, or explicit workspace `.agents/skills` | Managed |
+| Codex | Native user setup; portable repository setup | Managed |
+| Claude Code | Native user or repository rules and skills | Managed |
+| OpenCode | Native user or portable repository setup | Compatible, unverified |
+| Pi | Native user or portable repository setup | Compatible, unverified |
+| Warp | Manual user Global Rule; portable repository setup | Manual / Project standard |
+| OpenClaw | Explicit workspace instructions and native skills | Workspace managed, under validation |
+| Hermes | Explicit workspace with precedence-aware instructions and native skills | Workspace managed, under validation |
+| Generic | Output-only source and shell guidance | Manual |
+
+OpenCode and Hermes return a partial plan instead of creating `AGENTS.md` when doing so
+would shadow an existing fallback instruction file. Warp user setup installs compatible
+skills but gives you the exact Global Rule step to complete manually. OpenClaw and Hermes
+require `--workspace PATH` and must be configured separately for every isolated
+workspace and runtime.
+
+```sh
+friction setup opencode
+friction setup pi --scope repo
+friction setup warp
+friction setup openclaw --workspace /path/to/agent-workspace
+friction setup hermes --workspace /path/to/hermes-workspace
+friction setup generic --source my-agent --shell portable
+```
 
 ### 3. Work normally
 
-You do not run Friction before starting Codex or Claude Code. There is no Friction
+You do not run Friction before starting your coding agent. There is no Friction
 server, background process, or monitor. The setup persists, so after the one-time setup
 you start your coding agent normally and give it normal coding tasks.
 
@@ -369,8 +412,21 @@ friction setup codex --undo
 friction setup codex --undo --apply
 ```
 
-Replace `codex` with `claude-code` when needed. Friction removes only content it owns and
-refuses to overwrite or delete content that changed unexpectedly.
+Replace `codex` with the named adapter and matching scope you used. Friction removes
+only content it owns and refuses to overwrite or delete content that changed
+unexpectedly.
+
+Codex, OpenCode, Pi, and Warp use shared `.agents/skills`. Their named undo removes
+capture guidance but deliberately retains those skills so it cannot break another
+compatible agent. Remove shared skills only through their explicit lifecycle:
+
+```sh
+friction setup skills --undo
+friction setup skills --undo --apply
+```
+
+`standard`, Claude Code, OpenClaw, and Hermes own their installed skill copies and
+include them in the matching undo plan.
 
 To permanently remove one observation and its private history, preview the purge and then
 apply it. Replace the example ID with a complete ID from `friction list`:
@@ -390,8 +446,8 @@ Friction is designed to make its boundaries understandable:
 - Observations are stored locally on your computer.
 - There is no Friction account, cloud service, telemetry, continuously running process,
   automatic hook, transcript collection, or background review.
-- The command-line program behaves predictably and does not contact an AI model. Codex or
-  Claude Code provides the reasoning only when you ask it to use a review or fix skill.
+- The command-line program behaves predictably and does not contact an AI model. Your
+  coding agent provides the reasoning only when you ask it to use a review or fix skill.
 - Agent-authored text is limited in size and screened for high-confidence credential
   patterns before it is stored or shared.
 - Secret screening reduces risk but is not a password vault or a guarantee that every
@@ -429,7 +485,7 @@ from dogfood evidence before a stable `1.0` release.
 - It requires Node.js 24 or newer.
 - It is designed for one developer and local storage; there are no teams or sync.
 - It does not automatically understand or cluster observations. Review reasoning comes
-  from the Codex or Claude Code session you explicitly invoke.
+  from the coding-agent session you explicitly invoke.
 - It does not replace your repository's issue tracker.
 - It has not been designed for private stores larger than roughly 10,000 events.
 

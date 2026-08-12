@@ -1,4 +1,4 @@
-## Capture harness friction when you encounter it
+## Capture agent friction when you encounter it
 
 This repo runs Friction, a tool that captures friction in your workflow. It is designed to help agents identify and reduce avoidable friction in the development process. Think of Friction as HR for agents.
 

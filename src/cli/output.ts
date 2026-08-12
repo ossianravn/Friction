@@ -10,7 +10,8 @@ export type CliWarning = {
     | "event_findings"
     | "corpus_findings"
     | "shared_copies"
-    | "path_unavailable";
+    | "path_unavailable"
+    | "shared_skills_retained";
   message: string;
 };
 

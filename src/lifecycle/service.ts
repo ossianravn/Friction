@@ -1,7 +1,6 @@
 import {
   isSource,
   type FrictionEvent,
-  type Source,
 } from "../domain/events.js";
 import { FrictionFailure } from "../domain/failures.js";
 import {
@@ -118,7 +117,7 @@ export async function changeLifecycle(
     eventId: createEventId(),
     observationId: input.observationId,
     createdAt: clock.now().toISOString(),
-    actor: source as Source,
+    actor: source,
     note: note?.text ?? null,
     redaction: {
       rulesetVersion: 1 as const,

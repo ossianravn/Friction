@@ -1,6 +1,8 @@
 ---
 name: friction-fix
 description: Fix, address, resolve, or remediate explicitly named Friction observations or a named reviewed cluster. Use only when the user explicitly authorizes that exact fix scope; do not use a review request as authorization to change anything.
+license: MIT
+compatibility: Requires the friction CLI on PATH and permission to read and append to its private local store.
 ---
 
 # Fix Friction
